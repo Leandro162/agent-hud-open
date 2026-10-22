@@ -3,6 +3,45 @@
   <channel>
     <title>Agent HUD</title>
     <item>
+      <title>0.6.0-beta.2</title>
+      <pubDate>Thu, 22 Oct 2026 19:36:11 +0800</pubDate>
+      <link>https://github.com/jazzenchen/agent-hud-open/releases/tag/v0.6.0-beta.2</link>
+      <sparkle:channel>beta</sparkle:channel>
+      <sparkle:minimumAutoupdateVersion>490</sparkle:minimumAutoupdateVersion>
+      <sparkle:version>490</sparkle:version>
+      <sparkle:shortVersionString>0.6.0-beta.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+      <description sparkle:format="markdown"># Agent HUD 0.6.0-beta.2
+
+## Compatibility
+
+**Requires Agent HUD for iPhone 1.7.2 or later** for iPhone and Apple Watch sync. Update the iPhone app before updating the Mac. Older iPhone versions cannot read this release's data.
+
+[Get the iPhone app](https://apps.apple.com/app/id6812113619).
+
+If the required iPhone version is not yet on the App Store, cross-device features require the corresponding TestFlight version.
+
+Requires an Apple Silicon Mac running macOS 14 or later.
+
+## Changes
+
+### Coming from 0.5.5
+
+- Includes everything in [0.6.0-beta.1](https://github.com/jazzenchen/agent-hud-open/releases/tag/v0.6.0-beta.1), which moves Agent HUD to a new cross-platform app and brings your settings and 30 days of quota history with it.
+
+### Fixes
+
+- Takes over what 0.5.5 published to iCloud the first time it starts, so those records still expire on time and go away when you turn Agent HUD Remote off. If you run 0.6.0-beta.1, this beta catches up.
+- Shows again on the iPhone where each session runs, the CLI, the desktop app or an IDE, instead of only the agent's name, and lets you filter by it.
+- Stops the iPhone from showing token and cost totals as complete while the Mac is still reading your agents' logs.
+- Lets only one copy of Agent HUD collect into the same data at a time: a second copy, such as a build of agent-hud-open, is refused while the first one runs.
+</description>
+      <enclosure url="https://github.com/jazzenchen/agent-hud-open/releases/download/v0.6.0-beta.2/Agent-HUD-0.6.0-beta.2-arm64.dmg" length="51197517" type="application/octet-stream" sparkle:edSignature="otolSrIoAMHxtRWYSim7BsXHfuENjUzSrUV4TFlr1AWSF4aUxLRHX9wcAhd0BqsfYjw2+7g/m3YI3PfGevrTAg==" />
+      <agenthudMacOnly>false</agenthudMacOnly>
+      <agenthudMinimumIOSVersion>1.7.2</agenthudMinimumIOSVersion>
+    </item>
+    <item>
       <title>0.6.0-beta.1</title>
       <pubDate>Thu, 22 Oct 2026 18:37:50 +0800</pubDate>
       <link>https://github.com/jazzenchen/agent-hud-open/releases/tag/v0.6.0-beta.1</link>
