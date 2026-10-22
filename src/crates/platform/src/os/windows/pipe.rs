@@ -137,6 +137,19 @@ pub(crate) fn owned_path(path: &Path) -> bool {
     sid().is_ok_and(|sid| sid == owner)
 }
 pub(crate) fn private_directory(path: &Path) -> Result<(), String> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        // A later store may protect a missing ancestor too. Give every newly
+        // created directory the user's ownership, leaving existing parents alone.
+        if !parent
+            .try_exists()
+            .map_err(|_| "The private IPC directory is unavailable")?
+        {
+            private_directory(parent)?;
+        }
+    }
     let descriptor = security(true)?;
     let wide_path = wide(path.as_os_str());
     let attributes = SECURITY_ATTRIBUTES {
@@ -147,12 +160,6 @@ pub(crate) fn private_directory(path: &Path) -> Result<(), String> {
     // The default owner of an elevated process may be Administrators. Set this
     // new leaf's owner explicitly at creation; never take ownership of an
     // existing directory, including one owned by another administrator.
-    if let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        std::fs::create_dir_all(parent).map_err(|_| "The private IPC directory is unavailable")?;
-    }
     if unsafe { CreateDirectoryW(wide_path.as_ptr(), &attributes) } == 0
         && unsafe { GetLastError() } != ERROR_ALREADY_EXISTS
     {
@@ -464,6 +471,19 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn missing_private_directory_ancestors_keep_user_ownership() {
+        let temp = tempfile::tempdir().unwrap();
+        let outer = temp.path().join("outer");
+        let inner = outer.join("inner");
+        let data = inner.join("private");
+        private_directory(&data).unwrap();
+        for directory in [&outer, &inner, &data] {
+            assert!(owned_path(directory));
+            private_directory(directory).unwrap();
+        }
+    }
 
     #[test]
     fn private_pipe_round_trip_and_exclusive_owner() {

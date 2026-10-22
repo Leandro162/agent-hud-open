@@ -154,12 +154,7 @@ mod tests {
             .into_iter()
             .filter(|root| root.provider != "grok-bot")
             .map(|root| {
-                let path = root
-                    .path
-                    .strip_prefix(home)
-                    .unwrap()
-                    .to_string_lossy()
-                    .into_owned();
+                let path = root.path.strip_prefix(home).unwrap().to_owned();
                 (root.provider, path)
             })
             .collect::<Vec<_>>();
@@ -192,7 +187,7 @@ mod tests {
         ];
         let expected = expected
             .iter()
-            .map(|(provider, path)| (*provider, (*path).to_owned()))
+            .map(|(provider, path)| (*provider, PathBuf::from(path)))
             .collect::<Vec<_>>();
         assert_eq!(roots, expected);
     }

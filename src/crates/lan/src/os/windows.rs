@@ -202,7 +202,11 @@ pub(crate) fn create_directory(path: &Path) -> Result<()> {
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
     {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        // A later store can protect one of these ancestors too. Give newly
+        // created parents the same user ownership even in an elevated process.
+        if !parent.try_exists().map_err(|e| e.to_string())? {
+            create_directory(parent)?;
+        }
     }
     let descriptor = directory_security(&current_user()?)?;
     let attributes = SECURITY_ATTRIBUTES {
@@ -372,6 +376,9 @@ mod tests {
             );
         }
         entries.sort();
+        // Windows can split a generic inheritable grant into effective and
+        // inherit-only ACEs. Compare the granted identities, not the ACE count.
+        entries.dedup();
         (control, entries)
     }
 
@@ -385,10 +392,13 @@ mod tests {
         }
         let root =
             Fixture(std::env::temp_dir().join(format!("agenthud-acl-{}", uuid::Uuid::new_v4())));
-        // Creation must establish TokenUser ownership even from an elevated
-        // process. The protector validates ownership without changing it.
-        create_directory(&root.0).unwrap();
-        protect_directory(&root.0).unwrap();
+        // A child store can be initialized before its parents are used as
+        // stores. Every newly created directory must have TokenUser ownership
+        // even in an elevated process; existing parents are left untouched.
+        let nested = root.0.join("data").join("messaging");
+        create_directory(&nested).unwrap();
+        protect_directory(&nested).unwrap();
+        crate::fs::private_dir(nested.parent().unwrap()).unwrap();
         crate::fs::private_dir(&root.0).unwrap();
         let (control, entries) = access_entries(&root.0);
         let mut expected = vec![current_user().unwrap(), "S-1-5-18".into()];
