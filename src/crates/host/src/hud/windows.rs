@@ -6,6 +6,7 @@ pub(super) use super::generic::{
     TextFocusOrigin,
 };
 use super::{base_limitations, HudCapabilities, PointerKeys};
+#[path = "windows/displays.rs"]
 mod displays;
 pub(super) use displays::{measure_screens, screen};
 
