@@ -43,7 +43,7 @@ jobs:
         run: |
           cargo clippy --workspace --tests --locked -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --workspace --locked
+          cargo test --workspace --locked --no-fail-fast
       - name: Build Windows NSIS installer
         run: pnpm run build:windows -- --bundle
       - uses: actions/upload-artifact@v4
