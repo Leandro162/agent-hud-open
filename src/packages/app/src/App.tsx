@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -328,6 +329,16 @@ function AppContent({
   };
   const glowHidden = presentation?.glowHidden ?? false;
   const [page, setPage] = useState<Page>("display");
+  // The running app's own version: a release is stamped with its version when
+  // it is built (0.6.0-beta.1), which a product's front end cannot know.
+  // `version` stands in outside the app.
+  const [runningVersion, setRunningVersion] = useState(version);
+  useEffect(() => {
+    if (!isTauri()) return;
+    void getVersion()
+      .then(setRunningVersion)
+      .catch(() => {});
+  }, []);
   // A page the host asked for (the update notice opens Updates): taken when
   // Settings starts and whenever the host asks again. A product page that
   // takes a built-in page's place answers for it.
@@ -719,7 +730,7 @@ function AppContent({
                 <div>
                   <strong>{productName}</strong>
                   <span>
-                    {version} · {demo ? "Demo" : "Live"}
+                    {runningVersion} · {demo ? "Demo" : "Live"}
                   </span>
                 </div>
                 {sourceMenu}
