@@ -28,6 +28,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - run: pnpm run check:platform

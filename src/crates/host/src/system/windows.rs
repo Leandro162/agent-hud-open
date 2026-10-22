@@ -1,8 +1,7 @@
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
-use windows_registry::CURRENT_USER;
+use windows_registry::{Key, CURRENT_USER};
 const KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-const NAME: &str = "Agent HUD Next";
 fn expected() -> Result<String, String> {
     let p = std::env::current_exe().map_err(|_| "The installed executable is unavailable")?;
     let p = p.to_str().ok_or("The executable path is invalid")?;
@@ -11,30 +10,37 @@ fn expected() -> Result<String, String> {
     }
     Ok(format!("\"{p}\""))
 }
-fn enabled() -> bool {
+fn enabled(identifier: &str) -> bool {
     CURRENT_USER
         .open(KEY)
         .ok()
-        .and_then(|k| k.get_string(NAME).ok())
+        .is_some_and(|key| entry_enabled(&key, identifier))
+}
+fn entry_enabled(key: &Key, identifier: &str) -> bool {
+    key.get_string(identifier)
+        .ok()
         .is_some_and(|s| expected().is_ok_and(|current| current == s))
 }
-pub(super) fn set_login(enabled: bool) -> Result<(), String> {
+pub(super) fn set_login(identifier: &str, enabled: bool) -> Result<(), String> {
     let k = CURRENT_USER
         .create(KEY)
         .map_err(|_| "The current-user startup registry is unavailable")?;
+    set_entry(&k, identifier, enabled)
+}
+fn set_entry(key: &Key, identifier: &str, enabled: bool) -> Result<(), String> {
     if enabled {
-        k.set_string(NAME, expected()?)
+        key.set_string(identifier, expected()?)
             .map_err(|_| "The startup entry could not be registered".to_owned())
     } else {
-        if k.get_string(NAME).is_ok() {
-            k.remove_value(NAME)
+        if key.get_string(identifier).is_ok() {
+            key.remove_value(identifier)
                 .map_err(|_| "The startup entry could not be removed")?;
         }
         Ok(())
     }
 }
-pub(super) fn status() -> Result<Value, String> {
-    let enabled = enabled();
+pub(super) fn status(identifier: &str) -> Result<Value, String> {
+    let enabled = enabled(identifier);
     Ok(
         json!({"platform":"windows","launchAtLogin":{"supported":true,"enabled":enabled,"status":if enabled{"enabled"}else{"disabled"},"notice":"Uses the current-user Run registry entry; Windows runtime validation is pending."}}),
     )
@@ -97,6 +103,32 @@ pub(super) fn private_output(_options: &mut std::fs::OpenOptions) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn products_keep_independent_startup_entries() {
+        // Use a disposable registry key, never the user's real Run entries.
+        struct Fixture(String);
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                let _ = CURRENT_USER.remove_tree(&self.0);
+            }
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let fixture = Fixture(format!(
+            r"Software\AgentHUDTests\{}",
+            temp.path().file_name().unwrap().to_string_lossy()
+        ));
+        let key = CURRENT_USER.create(&fixture.0).unwrap();
+        let public = "com.agenthud.next.preview";
+        let product = "app.agenthud.mac";
+        set_entry(&key, public, true).unwrap();
+        set_entry(&key, product, true).unwrap();
+        assert!(entry_enabled(&key, public));
+        assert!(entry_enabled(&key, product));
+        set_entry(&key, public, false).unwrap();
+        assert!(!entry_enabled(&key, public));
+        assert!(entry_enabled(&key, product));
+    }
 
     #[test]
     fn client_candidates_select_native_and_batch_launchers() {

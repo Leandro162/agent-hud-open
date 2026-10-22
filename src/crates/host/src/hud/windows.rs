@@ -67,17 +67,6 @@ pub(super) fn pointer_keys() -> PointerKeys {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn swapped_mouse_buttons_preserve_primary_and_secondary_semantics() {
-        assert_eq!(logical_mouse_buttons(false), (0x01, 0x02));
-        assert_eq!(logical_mouse_buttons(true), (0x02, 0x01));
-    }
-}
-
 pub(super) fn capabilities() -> HudCapabilities {
     let mut limitations = base_limitations();
     limitations.push("Tauri does not support visible-on-all-workspaces on Windows. Exclusive fullscreen applications and secure desktops are not covered.");
@@ -102,5 +91,16 @@ pub(super) fn capabilities() -> HudCapabilities {
         hardware_notch: false,
         persistent_display_identity: false,
         limitations,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn swapped_mouse_buttons_preserve_primary_and_secondary_semantics() {
+        assert_eq!(logical_mouse_buttons(false), (0x01, 0x02));
+        assert_eq!(logical_mouse_buttons(true), (0x02, 0x01));
     }
 }

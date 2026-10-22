@@ -7,7 +7,7 @@
 | Host module | Responsibilities | Verification |
 | --- | --- | --- |
 | `src/os/macos/` | Application Support and bundle paths, LaunchServices, original ledger locator, executable lookup, local process inspection, Finder reveal | Existing live Mac readers retained; this refactor is compile/fixture checked |
-| `src/os/windows/` | USERPROFILE/AppData paths, native `.exe` lookup, hidden child-process flag, Explorer reveal | Runtime unverified; Antigravity service discovery unsupported |
+| `src/os/windows/` | USERPROFILE/AppData paths, native `.exe` lookup, hidden child-process flag, same-user CIM ancestry, Credential Manager reads, Explorer reveal | Interactive runtime unverified; Antigravity service discovery unsupported |
 | `src/os/linux/` | XDG paths, desktop files, executable lookup, `/proc` executable identity, local process inspection, directory reveal | Runtime unverified; `ps`/`lsof` must be available for Antigravity |
 
 Each host explicitly chooses `source_roots`. The current native Claude/Codex on-disk layouts are shared by `portable_cli_roots`; WSL, Windows Store and other container-specific layouts need their own host adapter. A detected installation does not imply that its sessions or account format have been migrated.
@@ -16,7 +16,7 @@ Each host explicitly chooses `source_roots`. The current native Claude/Codex on-
 
 The account engine's JSON-lines protocol, bounded reader, deadlines, child ownership and cleanup stay in `accounts/engine.rs`. Provider identity, credentials, parsing and deduplication stay in `accounts/`; shell scripts do not make those decisions. Mac-specific dependencies such as `plist` are target-scoped in Cargo.toml. This crate contains no LAN/remote transport.
 
-The editable command sources in `scripts/macos/` and `scripts/linux/` contain only fixed OS operations. They are embedded with `include_str!` at build time: edit the source and rebuild the corresponding host target. There is no runtime script-path setting or hot reload. Arguments such as paths, UIDs and PIDs are separate argv values; they are never interpolated into script source. Process inspection remains bounded and runs only at the existing account-job cadence, not on each HUD/input poll. Raw process output may contain a token and is never logged.
+The editable command sources in `scripts/macos/`, `scripts/linux/` and `scripts/windows/` contain only fixed OS operations. They are embedded with `include_str!` at build time: edit the source and rebuild the corresponding host target. There is no runtime script-path setting or hot reload. Unix paths, UIDs and PIDs are separate argv values; Windows ancestry receives the caller PID through a dedicated environment variable. Values are never interpolated into script source. Process inspection is bounded and runs for account discovery or hook caller attribution, not on each HUD/input poll. Raw process output may contain a token and is never logged.
 
 Explorer is invoked directly with one literal argv value. PowerShell `-Command` would reinterpret trailing text, so a shell wrapper is intentionally avoided for that operation.
 
@@ -28,7 +28,7 @@ cargo check -p agent-hud-platform --target x86_64-pc-windows-msvc
 cargo check -p agent-hud-platform --target x86_64-unknown-linux-gnu
 ```
 
-These commands check this crate, not desktop packaging. A foreign target also needs its Rust standard library and native C toolchain for bundled SQLite/TLS dependencies. Only the Mac host was built during this refactor; Windows/Linux builds and runtime QA remain pending.
+These commands check this crate, not desktop packaging. A foreign target also needs its Rust standard library and native C toolchain for bundled SQLite/TLS dependencies. Windows builds and native tests run through the Windows GitHub workflow; interactive runtime qualification requires the machine acceptance checks in `docs/platform-builds.md`.
 
 
 ## Original Mac preference seed
@@ -43,7 +43,9 @@ Pure isolated fixtures cover these conversions and preserve the main Runtime's i
 
 The canonical product host must explicitly delegate its fixed executable before hook installation. `set_enabled` changes only owned client entries using pure provider formatters and safe I/O; shutdown stops the channel and observers without uninstalling user configuration. Pi/OpenCode observers publish lifecycle facts to the same coordinator. Antigravity native permissions use only already-running, verified loopback services, revalidate the exact pending permission before a once-only response, and report uncertain delivery instead of claiming success. DeepSeek's native web question observer remains pending. No adapter starts a client or performs a new login.
 
-Windows hooks/local tools share the current-user/SYSTEM-only named-pipe primitive with remote clients rejected. Direct Windows executable/argument installation formats exist for Claude and Copilot, and the documented Windows command override is used for Codex; unsupported client contracts return explicit errors. Actual Windows module API cross-checks passed, while a full Windows application build and native runtime behavior remain unverified. macOS Antigravity conversation navigation uses bounded local CDP on a running application and confirms the target before activating it; other hosts return a specific unsupported result.
+The public `agent-hud-open` desktop calls `run_with_context` with default `HostOptions`, so `canonical_executable` is `None` and client-hook installation is unavailable, including in its NSIS package. The private product can delegate its approved installed executable; only that host can enable supported client hooks through Settings. Implemented Windows hook formats do not change this ownership boundary.
+
+Windows hooks/local tools share the current-user/SYSTEM-only named-pipe primitive with remote clients rejected. Direct Windows executable/argument installation formats exist for Claude and Copilot, and the documented Windows command override is used for Codex; unsupported client contracts return explicit errors. Native compilation and test results are tracked by the Windows GitHub workflow; interactive hook behavior remains unverified. macOS Antigravity conversation navigation uses bounded local CDP on a running application and confirms the target before activating it; other hosts return a specific unsupported result.
 
 After the existing Copilot quota consent gate, Windows reads GitHub CLI's generic Credential Manager entry through `CredReadW`, with a 32 KiB blob limit and no credential enumeration, login, refresh or write. The exact target is `gh:github.com:`: [go-keyring composes `service:username`](https://github.com/zalando/go-keyring/blob/master/keyring_windows.go), and [GitHub CLI retains an empty-username token entry](https://github.com/cli/cli/blob/trunk/internal/config/config.go). Windows first uses environment tokens, then a token in the selected `hosts.yml`, then this global keyring fallback; per-account keyring selection is not implemented. Plaintext `hosts.yml` follows [GitHub CLI's directory precedence](https://github.com/cli/go-gh/blob/trunk/pkg/config/config.go): `GH_CONFIG_DIR`, `XDG_CONFIG_HOME/gh`, then Windows `APPDATA/GitHub CLI`, then `~/.config/gh`. Captured Windows environment keys retain the OS's case-insensitive lookup semantics.
 

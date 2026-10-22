@@ -822,7 +822,7 @@ pub fn run_with_options(
                 let handle = app.handle().clone();
                 app.manage(lock.listen(Arc::new(move || show(&handle))));
             }
-            app.manage(system::System::default());
+            app.manage(system::System::new(app.config().identifier.clone()));
             app.manage(mcp_clients::Clients::default());
             app.manage(claude_plugin::ClaudePlugin::new(
                 extension

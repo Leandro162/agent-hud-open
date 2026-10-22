@@ -48,11 +48,17 @@ pub(crate) fn stop_client(child: &mut std::process::Child) {
     target::stop_client(child)
 }
 
-#[derive(Default)]
 pub struct System {
+    identifier: String,
     cached: Mutex<Option<Value>>,
 }
 impl System {
+    pub fn new(identifier: String) -> Self {
+        Self {
+            identifier,
+            cached: Mutex::new(None),
+        }
+    }
     pub fn register_if_never_registered(&self) {
         if target::register_if_never_registered() {
             if let Ok(mut cached) = self.cached.lock() {
@@ -61,7 +67,7 @@ impl System {
         }
     }
     fn refresh(&self) -> Result<Value, String> {
-        let status = target::status()?;
+        let status = target::status(&self.identifier)?;
         *self.cached.lock().map_err(|_| "System state unavailable")? = Some(status.clone());
         Ok(status)
     }
@@ -89,7 +95,7 @@ impl System {
         let enabled = value
             .as_bool()
             .ok_or("The system setting must be a boolean")?;
-        target::set_login(enabled)?;
+        target::set_login(&self.identifier, enabled)?;
         let status = self.refresh()?;
         Ok(Some(status["launchAtLogin"]["enabled"].clone()))
     }
