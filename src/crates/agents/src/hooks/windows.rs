@@ -172,8 +172,10 @@ mod tests {
             .decode(encoded)
             .unwrap();
         let words = bytes
-            .chunks_exact(2)
-            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|bytes| u16::from_le_bytes(*bytes))
             .collect::<Vec<_>>();
         let script = String::from_utf16(&words).unwrap();
         assert!(script.ends_with("& 'C:\\Users\\O''Brien\\Agent HUD.exe' --remote-hook codex"));
