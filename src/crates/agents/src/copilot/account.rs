@@ -40,10 +40,19 @@ fn token(host: &dyn Host) -> Option<String> {
     }
     let directory = host
         .env("GH_CONFIG_DIR")
+        .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .or_else(|| {
             host.env("XDG_CONFIG_HOME")
+                .filter(|value| !value.is_empty())
                 .map(|s| PathBuf::from(s).join("gh"))
+        })
+        .or_else(|| match host.os() {
+            crate::Os::Windows => host
+                .env("APPDATA")
+                .filter(|value| !value.is_empty())
+                .map(|s| PathBuf::from(s).join("GitHub CLI")),
+            _ => None,
         })
         .unwrap_or_else(|| host.home().join(".config/gh"));
     const LIMIT: u64 = 1024 * 1024;
@@ -282,6 +291,29 @@ mod tests {
         host.secrets
             .insert(STORED_TOKEN.into(), Answer::Unsupported);
         assert_eq!(token(&host).as_deref(), Some("t"));
+    }
+
+    #[test]
+    fn windows_gh_config_uses_appdata_after_explicit_overrides() {
+        let yml = |token: &str| format!("github.com:\n  oauth_token: {token}\n");
+        let mut host = FakeHost::new("/home/u")
+            .env("APPDATA", "/roaming")
+            .env("GH_CONFIG_DIR", "")
+            .env("XDG_CONFIG_HOME", "")
+            .file("/roaming/GitHub CLI/hosts.yml", &yml("roaming"))
+            .file("/xdg/gh/hosts.yml", &yml("xdg"))
+            .file("/custom/hosts.yml", &yml("custom"))
+            .file("/home/u/.config/gh/hosts.yml", &yml("home"));
+        host.os = crate::Os::Windows;
+        assert_eq!(token(&host).as_deref(), Some("roaming"));
+        host.env.insert("XDG_CONFIG_HOME".into(), "/xdg".into());
+        assert_eq!(token(&host).as_deref(), Some("xdg"));
+        host.env.insert("GH_CONFIG_DIR".into(), "/custom".into());
+        assert_eq!(token(&host).as_deref(), Some("custom"));
+        host.env.remove("GH_CONFIG_DIR");
+        host.env.remove("XDG_CONFIG_HOME");
+        host.os = crate::Os::MacOs;
+        assert_eq!(token(&host).as_deref(), Some("home"));
     }
 
     #[test]

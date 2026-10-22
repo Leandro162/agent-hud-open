@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn saved_revocation_and_known_empty_array_remain_readable() {
         let directory = std::env::temp_dir().join(format!("lan-grants-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&directory).unwrap();
+        crate::fs::private_dir(&directory).unwrap();
         let file = directory.join("clients.json");
         std::fs::write(&file, br#"{"paired-client":"credential-digest"}"#).unwrap();
         let grants = Credentials::new("fixture", directory.clone(), Arc::new(NoSecrets)).unwrap();

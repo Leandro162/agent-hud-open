@@ -26,7 +26,7 @@ pub(crate) use target::*;
 /// it (agent-hud-native-open ClientHome.variable); None when unset, empty or only
 /// whitespace. `home` is kept for callers that resolve relative defaults.
 pub(crate) fn variable(env: &Environment, key: &str, _home: &Path) -> Option<PathBuf> {
-    env.get(key)
+    environment_value(env, key)
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
@@ -69,7 +69,7 @@ pub(crate) fn resolve(
 ) -> Vec<PathBuf> {
     location.resolve(
         &folder(home, env, location.base),
-        &|key| env.get(key).cloned(),
+        &|key| environment_value(env, key).map(str::to_owned),
         &Disk,
     )
 }
@@ -104,7 +104,7 @@ pub(crate) fn data_home(home: &Path, env: &Environment) -> PathBuf {
     variable(env, "XDG_DATA_HOME", home).unwrap_or_else(|| home.join(".local/share"))
 }
 pub(crate) fn path_entries(env: &Environment) -> Vec<PathBuf> {
-    env.get("PATH")
+    environment_value(env, "PATH")
         .map(std::env::split_paths)
         .into_iter()
         .flatten()

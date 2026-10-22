@@ -10,7 +10,10 @@ use std::{
     path::Path,
 };
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, LocalFree, ERROR_BUFFER_OVERFLOW, ERROR_SUCCESS, HANDLE},
+    Foundation::{
+        CloseHandle, GetLastError, LocalFree, ERROR_ALREADY_EXISTS, ERROR_BUFFER_OVERFLOW,
+        ERROR_SUCCESS, HANDLE,
+    },
     NetworkManagement::{
         IpHelper::{
             GetAdaptersAddresses, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
@@ -26,9 +29,10 @@ use windows_sys::Win32::{
             GetNamedSecurityInfoW, SetNamedSecurityInfoW, SE_FILE_OBJECT,
         },
         GetSecurityDescriptorDacl, GetTokenInformation, TokenUser, DACL_SECURITY_INFORMATION,
-        OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, TOKEN_QUERY, TOKEN_USER,
+        OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, SECURITY_ATTRIBUTES,
+        TOKEN_QUERY, TOKEN_USER,
     },
-    Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT,
+    Storage::FileSystem::{CreateDirectoryW, FILE_ATTRIBUTE_REPARSE_POINT},
     System::Threading::{GetCurrentProcess, OpenProcessToken},
 };
 
@@ -169,6 +173,52 @@ fn current_user() -> Result<String> {
     unsafe { sid_string((*buffer.as_ptr().cast::<TOKEN_USER>()).User.Sid) }
 }
 
+fn directory_security(sid: &str) -> Result<Local> {
+    // Protected: remove inherited broad grants. Both file and subdirectory
+    // inheritance keep every newly written credential private as well.
+    // An explicit owner also avoids Administrators becoming a new directory's
+    // default owner when this user's process is running elevated.
+    let sddl: Vec<u16> = format!("O:{sid}D:P(A;OICI;GA;;;{sid})(A;OICI;GA;;;SY)")
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+    let mut descriptor = std::ptr::null_mut();
+    if unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl.as_ptr(),
+            1,
+            &mut descriptor,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err("The private LAN directory ACL could not be created".into());
+    }
+    Ok(Local(descriptor))
+}
+
+pub(crate) fn create_directory(path: &Path) -> Result<()> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let descriptor = directory_security(&current_user()?)?;
+    let attributes = SECURITY_ATTRIBUTES {
+        nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: descriptor.0,
+        bInheritHandle: 0,
+    };
+    let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    if unsafe { CreateDirectoryW(path.as_ptr(), &attributes) } == 0
+        && unsafe { GetLastError() } != ERROR_ALREADY_EXISTS
+    {
+        return Err("The private LAN directory could not be created".into());
+    }
+    Ok(())
+}
+
 pub(crate) fn protect_directory(path: &Path) -> Result<()> {
     let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     if !metadata.is_dir() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
@@ -194,25 +244,7 @@ pub(crate) fn protect_directory(path: &Path) -> Result<()> {
     if status != ERROR_SUCCESS || owner.is_null() || unsafe { sid_string(owner) }? != sid {
         return Err("The LAN credential directory must belong to the current user".into());
     }
-    // Protected: remove inherited broad grants. Both file and subdirectory
-    // inheritance keep every newly written credential private as well.
-    let sddl: Vec<u16> = format!("D:P(A;OICI;GA;;;{sid})(A;OICI;GA;;;SY)")
-        .encode_utf16()
-        .chain(Some(0))
-        .collect();
-    let mut descriptor = std::ptr::null_mut();
-    if unsafe {
-        ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            sddl.as_ptr(),
-            1,
-            &mut descriptor,
-            std::ptr::null_mut(),
-        )
-    } == 0
-    {
-        return Err("The private LAN directory ACL could not be created".into());
-    }
-    let descriptor = Local(descriptor);
+    let descriptor = directory_security(&sid)?;
     let mut present = 0;
     let mut defaulted = 0;
     let mut dacl = std::ptr::null_mut();
@@ -353,6 +385,10 @@ mod tests {
         }
         let root =
             Fixture(std::env::temp_dir().join(format!("agenthud-acl-{}", uuid::Uuid::new_v4())));
+        // Creation must establish TokenUser ownership even from an elevated
+        // process. The protector validates ownership without changing it.
+        create_directory(&root.0).unwrap();
+        protect_directory(&root.0).unwrap();
         crate::fs::private_dir(&root.0).unwrap();
         let (control, entries) = access_entries(&root.0);
         let mut expected = vec![current_user().unwrap(), "S-1-5-18".into()];

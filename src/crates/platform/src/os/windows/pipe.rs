@@ -19,7 +19,7 @@ use tokio::{
     sync::watch,
 };
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, LocalFree, HANDLE},
+    Foundation::{CloseHandle, GetLastError, LocalFree, ERROR_ALREADY_EXISTS, HANDLE},
     Security::{
         Authorization::{
             ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
@@ -29,6 +29,7 @@ use windows_sys::Win32::{
         OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, SECURITY_ATTRIBUTES,
         TOKEN_QUERY, TOKEN_USER,
     },
+    Storage::FileSystem::CreateDirectoryW,
     System::Threading::{GetCurrentProcess, OpenProcessToken},
 };
 fn wide(value: &OsStr) -> Vec<u16> {
@@ -83,7 +84,7 @@ fn security(inherit: bool) -> Result<Local, String> {
     let sid = sid()?;
     let flags = if inherit { "OICI" } else { "" };
     let sddl = wide(OsStr::new(&format!(
-        "D:P(A;{flags};GA;;;{sid})(A;{flags};GA;;;SY)"
+        "O:{sid}D:P(A;{flags};GA;;;{sid})(A;{flags};GA;;;SY)"
     )));
     let mut descriptor = std::ptr::null_mut();
     if unsafe {
@@ -136,7 +137,27 @@ pub(crate) fn owned_path(path: &Path) -> bool {
     sid().is_ok_and(|sid| sid == owner)
 }
 pub(crate) fn private_directory(path: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(path).map_err(|_| "The private IPC directory is unavailable")?;
+    let descriptor = security(true)?;
+    let wide_path = wide(path.as_os_str());
+    let attributes = SECURITY_ATTRIBUTES {
+        nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: descriptor.0,
+        bInheritHandle: 0,
+    };
+    // The default owner of an elevated process may be Administrators. Set this
+    // new leaf's owner explicitly at creation; never take ownership of an
+    // existing directory, including one owned by another administrator.
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent).map_err(|_| "The private IPC directory is unavailable")?;
+    }
+    if unsafe { CreateDirectoryW(wide_path.as_ptr(), &attributes) } == 0
+        && unsafe { GetLastError() } != ERROR_ALREADY_EXISTS
+    {
+        return Err("The private IPC directory is unavailable".into());
+    }
     let metadata =
         std::fs::symlink_metadata(path).map_err(|_| "The private IPC directory is unavailable")?;
     use std::os::windows::fs::MetadataExt;
@@ -146,11 +167,9 @@ pub(crate) fn private_directory(path: &Path) -> Result<(), String> {
     if !owned_path(path) {
         return Err("The IPC directory must belong to the current user".into());
     }
-    let descriptor = security(true)?;
-    let path = wide(path.as_os_str());
     if unsafe {
         SetFileSecurityW(
-            path.as_ptr(),
+            wide_path.as_ptr(),
             DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
             descriptor.0,
         )
@@ -449,14 +468,16 @@ mod tests {
     #[test]
     fn private_pipe_round_trip_and_exclusive_owner() {
         let temp = tempfile::tempdir().unwrap();
+        let data = temp.path().join("private");
         let handler: Handler = Arc::new(|message, _| Some(message));
-        let server = Server::start(temp.path(), "test", 1024, 1024, handler.clone()).unwrap();
+        let server = Server::start(&data, "test", 1024, 1024, handler.clone()).unwrap();
         assert!(server.is_listening());
-        assert!(Server::start(temp.path(), "test", 1024, 1024, handler).is_err());
+        assert!(owned_path(&data));
+        assert!(Server::start(&data, "test", 1024, 1024, handler).is_err());
         let message = json!({"text": "请求 C:\\my project", "empty": ""});
         assert_eq!(
             request(
-                temp.path(),
+                &data,
                 "test",
                 &message,
                 1024,
@@ -471,6 +492,7 @@ mod tests {
     #[test]
     fn saturated_pipe_shutdown_cancels_waiting_approvals() {
         let temp = tempfile::tempdir().unwrap();
+        let data = temp.path().join("private");
         let started = Arc::new(AtomicUsize::new(0));
         let count = started.clone();
         let handler: Handler = Arc::new(move |_, active| {
@@ -480,8 +502,8 @@ mod tests {
             }
             None
         });
-        let server = Server::start(temp.path(), "saturated", 1024, 1024, handler).unwrap();
-        let name = name(temp.path(), "saturated").unwrap();
+        let server = Server::start(&data, "saturated", 1024, 1024, handler).unwrap();
+        let name = name(&data, "saturated").unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
