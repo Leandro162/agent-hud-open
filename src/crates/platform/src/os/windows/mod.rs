@@ -84,6 +84,21 @@ pub(crate) fn configure_command(command: &mut Command) {
     use std::os::windows::process::CommandExt;
     command.creation_flags(0x08000000);
 }
+pub(crate) fn is_shell(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            [
+                "cmd.exe",
+                "powershell.exe",
+                "pwsh.exe",
+                "bash.exe",
+                "sh.exe",
+            ]
+            .iter()
+            .any(|shell| name.eq_ignore_ascii_case(shell))
+        })
+}
 pub(crate) fn engine_candidates(home: &Path, env: &Environment, name: &str) -> Vec<PathBuf> {
     let mut dirs = vec![
         home.join(".local/bin"),

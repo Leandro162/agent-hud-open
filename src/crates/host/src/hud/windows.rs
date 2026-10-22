@@ -27,21 +27,54 @@ fn key_down(virtual_key: i32) -> bool {
 }
 
 pub(super) fn left_mouse_down() -> Result<bool, String> {
-    Ok(key_down(0x01))
+    Ok(key_down(mouse_button_keys().0))
+}
+
+/// GetAsyncKeyState reports physical buttons; the HUD follows the user's
+/// primary button just as the WebView's pointer events do.
+fn mouse_button_keys() -> (i32, i32) {
+    use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_SWAPBUTTON};
+    logical_mouse_buttons(unsafe { GetSystemMetrics(SM_SWAPBUTTON) } != 0)
+}
+
+fn logical_mouse_buttons(swapped: bool) -> (i32, i32) {
+    if swapped {
+        (0x02, 0x01)
+    } else {
+        (0x01, 0x02)
+    }
 }
 
 pub(super) fn pointer_keys() -> PointerKeys {
-    let buttons = [(0x01, 1), (0x02, 2), (0x04, 4), (0x05, 8), (0x06, 16)]
-        .into_iter()
-        .fold(0, |bits, (key, mask)| {
-            bits | if key_down(key) { mask } else { 0 }
-        });
+    let (primary, secondary) = mouse_button_keys();
+    let buttons = [
+        (primary, 1),
+        (secondary, 2),
+        (0x04, 4),
+        (0x05, 8),
+        (0x06, 16),
+    ]
+    .into_iter()
+    .fold(0, |bits, (key, mask)| {
+        bits | if key_down(key) { mask } else { 0 }
+    });
     PointerKeys {
         buttons: Some(buttons),
         alt: Some(key_down(0x12)),
         ctrl: Some(key_down(0x11)),
         meta: Some(key_down(0x5b) || key_down(0x5c)),
         shift: Some(key_down(0x10)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn swapped_mouse_buttons_preserve_primary_and_secondary_semantics() {
+        assert_eq!(logical_mouse_buttons(false), (0x01, 0x02));
+        assert_eq!(logical_mouse_buttons(true), (0x02, 0x01));
     }
 }
 

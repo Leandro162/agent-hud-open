@@ -72,6 +72,7 @@ stubs are the list of open work for that operating system.
 | Local MCP channel | `crates/platform/src/local_tools/mod.rs` | `local_tools/unix.rs`, `local_tools/windows.rs` | `Server`, `request` |
 | One running copy | `crates/platform/src/instance/mod.rs` (the lock itself is portable) | `instance/unix.rs` (socket beside the lock), `instance/windows.rs` (named pipe) | `Endpoint`, `listen`, `hand_over` |
 | LAN listener and files | `crates/lan/src/os/mod.rs` | `os/unix.rs`, `os/windows.rs` | `wake_pair`, `wait`, `addresses`, `protect_directory`, `private_file` |
+| LAN credential store | `crates/lan/src/credentials.rs` | `credentials/keychain_macos.rs`, `credentials/credential_windows.rs` | `SecretStore`: login Keychain / current-user Windows Credential Manager |
 | LAN TLS identity | `crates/lan/src/identity.rs` | `identity/macos.rs`, `identity/windows.rs`, `identity/linux.rs` | `load` |
 | HUD windows | `crates/host/src/hud/mod.rs` | `hud/macos.rs`, `hud/windows.rs`, `hud/linux.rs`; `hud/generic.rs` holds Tauri-only pieces a host may re-export | listed at the selector |
 | App shell | `crates/host/src/shell/mod.rs` | `shell/macos.rs`, `shell/windows.rs`, `shell/linux.rs` | `install`, `window_opened`, `windows_changed`, `reopened`, `statistics_chrome`, `system_prefers_chinese`, `alert` (Linux prints to standard error until a dialog exists before Tauri starts) |
@@ -136,3 +137,10 @@ ports; they are not proof of Windows/Linux builds, account coverage, focus,
 mixed-DPI behavior or installer readiness. Each platform must build on its own
 runner and verify its actual clients, credentials, files, process cancellation,
 multi-window behavior and normal/rewrite/truncate log ingestion.
+
+Windows LAN uses a non-exportable P-256 CNG key and the same certificate format
+as macOS. Only the certificate is written to the protected local data directory;
+TLS signatures stay in CNG. Adapter enumeration supplies active IPv4 endpoints,
+and grants/tokens use a current-user DACL and Windows Credential Manager.
+Windows-native persistence, ACL, pipe and process checks run in GitHub Actions;
+LAN pairing and firewall reachability still need real-machine acceptance.

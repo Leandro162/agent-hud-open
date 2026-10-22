@@ -254,10 +254,14 @@ mod tests {
     }
 }
 
-// The secret store for grants. macOS keeps them in the Keychain; other hosts
-// need their own `SecretStore` before LAN pairing can persist there.
+// Each host supplies its own persistent user secret store.
 #[cfg(target_os = "macos")]
 #[path = "credentials/keychain_macos.rs"]
 mod keychain;
 #[cfg(target_os = "macos")]
 pub use keychain::KeychainSecrets;
+#[cfg(target_os = "windows")]
+#[path = "credentials/credential_windows.rs"]
+mod credential;
+#[cfg(target_os = "windows")]
+pub use credential::WindowsSecrets;

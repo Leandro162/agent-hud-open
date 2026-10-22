@@ -34,8 +34,9 @@ pub(super) fn set_login(enabled: bool) -> Result<(), String> {
     }
 }
 pub(super) fn status() -> Result<Value, String> {
+    let enabled = enabled();
     Ok(
-        json!({"platform":"windows","launchAtLogin":{"supported":true,"enabled":enabled(),"status":if enabled(){"enabled"}else{"disabled"},"notice":"Uses the current-user Run registry entry; Windows runtime validation is pending."}}),
+        json!({"platform":"windows","launchAtLogin":{"supported":true,"enabled":enabled,"status":if enabled{"enabled"}else{"disabled"},"notice":"Uses the current-user Run registry entry; Windows runtime validation is pending."}}),
     )
 }
 
@@ -44,12 +45,110 @@ pub(super) fn register_if_never_registered() -> bool {
     false
 }
 
-/// npm installs .cmd shims beside native .exe files.
+/// npm installs .cmd shims beside native .exe files. Extensionless npm shims
+/// contain POSIX shell scripts and must not be offered to CreateProcessW.
 pub(super) fn cli_candidates(_home: &Path, command: &str, dirs: Vec<PathBuf>) -> Vec<PathBuf> {
     dirs.into_iter()
-        .flat_map(|dir| [".exe", ".cmd", ""].map(|suffix| dir.join(format!("{command}{suffix}"))))
+        .flat_map(|dir| {
+            [".exe", ".cmd", ".bat"].map(|suffix| dir.join(format!("{command}{suffix}")))
+        })
         .collect()
+}
+
+/// PowerShell needs the call operator for a quoted command name; single quotes
+/// preserve spaces, dollar signs and backticks, and apostrophes are doubled.
+pub(super) fn client_command_line(arguments: &[String]) -> String {
+    format!(
+        "& {}",
+        arguments
+            .iter()
+            .map(|argument| format!("'{}'", argument.replace('\'', "''")))
+            .collect::<Vec<_>>()
+            .join(" ")
+    )
+}
+
+pub(super) fn configure_client_command(command: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+/// npm's .cmd launcher owns a node.exe descendant. Killing only cmd.exe would
+/// leave a timed-out setup operation running and still changing client files.
+pub(super) fn stop_client(child: &mut std::process::Child) {
+    use std::process::{Command, Stdio};
+    let mut command = Command::new("taskkill.exe");
+    configure_client_command(&mut command);
+    let _ = command
+        .args(["/PID", &child.id().to_string(), "/T", "/F"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    // Also release/reap the original child if taskkill is unavailable or failed.
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// The temporary directory is already per-user.
 pub(super) fn private_output(_options: &mut std::fs::OpenOptions) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn client_candidates_select_native_and_batch_launchers() {
+        let dir = PathBuf::from(r"C:\Users\Alice\AppData\Roaming\npm");
+        assert_eq!(
+            cli_candidates(Path::new(r"C:\Users\Alice"), "codex", vec![dir.clone()]),
+            ["codex.exe", "codex.cmd", "codex.bat"].map(|name| dir.join(name))
+        );
+    }
+
+    #[test]
+    fn copied_setup_command_is_literal_powershell() {
+        assert_eq!(
+            client_command_line(&[
+                "codex".into(),
+                "mcp".into(),
+                "add".into(),
+                "agent-hud".into(),
+                "--".into(),
+                r"C:\Users\O'Brien\$tools`\Agent HUD.exe".into(),
+                "--mcp".into(),
+            ]),
+            r"& 'codex' 'mcp' 'add' 'agent-hud' '--' 'C:\Users\O''Brien\$tools`\Agent HUD.exe' '--mcp'"
+        );
+    }
+
+    #[test]
+    fn client_setup_executes_a_batch_launcher_with_literal_arguments() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("Client tools");
+        std::fs::create_dir(&folder).unwrap();
+        let launcher = folder.join("client.cmd");
+        std::fs::write(
+            &launcher,
+            "@echo off\r\nif \"%~1\"==\"expected value\" exit /b 0\r\necho wrong argument\r\nexit /b 7\r\n",
+        )
+        .unwrap();
+        crate::mcp_clients::run_client(
+            &launcher,
+            &["expected value".into()],
+            temp.path(),
+            std::time::Duration::from_secs(5),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::mcp_clients::run_client(
+                &launcher,
+                &["wrong value".into()],
+                temp.path(),
+                std::time::Duration::from_secs(5),
+            ),
+            Err("wrong argument".into())
+        );
+    }
+}

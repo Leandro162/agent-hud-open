@@ -16,6 +16,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub(crate) fn is_shell(path: &Path) -> bool {
+    matches!(path.to_str(), Some("/bin/sh" | "/bin/bash" | "/bin/zsh"))
+}
 pub(super) fn executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     fs::metadata(path)

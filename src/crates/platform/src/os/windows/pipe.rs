@@ -220,23 +220,51 @@ impl Server {
         let running = Arc::new(AtomicBool::new(true));
         let active = running.clone();
         let (stop, mut stopped) = watch::channel(false);
-        let thread=std::thread::Builder::new().name(format!("agenthud-{channel}-pipe")).spawn(move||{
-            runtime.block_on(async move{
-                let mut listener=initial;let mut jobs=tokio::task::JoinSet::new();
-                loop{
-                    let connected=tokio::select!{_ = stopped.changed()=>break,result=listener.connect()=>result};
-                    if connected.is_err()||!active.load(Ordering::Acquire){break;}
-                    while jobs.try_join_next().is_some(){}
-                    if jobs.len()>=63{
-                        let _ = jobs.join_next().await;
-                        while jobs.try_join_next().is_some(){}
+        let thread = std::thread::Builder::new()
+            .name(format!("agenthud-{channel}-pipe"))
+            .spawn(move || {
+                runtime.block_on(async move {
+                    let mut listener = initial;
+                    let mut jobs = tokio::task::JoinSet::new();
+                    loop {
+                        let connected = tokio::select! {
+                            _ = stopped.changed() => break,
+                            result = listener.connect() => result,
+                        };
+                        if connected.is_err() || !active.load(Ordering::Acquire) {
+                            break;
+                        }
+                        while jobs.try_join_next().is_some() {}
+                        if jobs.len() >= 63 {
+                            // Shutdown must also cancel an accept waiting for a
+                            // worker slot, including long-lived approval calls.
+                            tokio::select! {
+                                _ = stopped.changed() => break,
+                                _ = jobs.join_next() => {},
+                            }
+                            while jobs.try_join_next().is_some() {}
+                        }
+                        let next = match pipe(&name, false) {
+                            Ok(next) => next,
+                            Err(_) => break,
+                        };
+                        let stream = std::mem::replace(&mut listener, next);
+                        jobs.spawn(serve(
+                            stream,
+                            request_limit,
+                            response_limit,
+                            handler.clone(),
+                            active.clone(),
+                            stopped.clone(),
+                        ));
                     }
-                    let next=match pipe(&name,false){Ok(next)=>next,Err(_)=>break};let stream=std::mem::replace(&mut listener,next);
-                    jobs.spawn(serve(stream,request_limit,response_limit,handler.clone(),active.clone(),stopped.clone()));
-                }
-                active.store(false,Ordering::Release);jobs.abort_all();while jobs.join_next().await.is_some(){}
-            });runtime.shutdown_timeout(Duration::from_secs(2));
-        }).map_err(|_|"The named-pipe worker could not start")?;
+                    active.store(false, Ordering::Release);
+                    jobs.abort_all();
+                    while jobs.join_next().await.is_some() {}
+                });
+                runtime.shutdown_timeout(Duration::from_secs(2));
+            })
+            .map_err(|_| "The named-pipe worker could not start")?;
         Ok(Self {
             running,
             stop,
@@ -346,9 +374,7 @@ pub(crate) fn request(
         .build()
         .map_err(|_| "The local IPC runtime is unavailable")?;
     runtime.block_on(async {
-        let mut stream = ClientOptions::new().open(&name).map_err(|_| {
-            "Agent HUD Next is not listening; enable the requested local service in Settings"
-        })?;
+        let mut stream = connect(&name, timeout.min(Duration::from_secs(2))).await?;
         tokio::time::timeout(Duration::from_secs(2), stream.write_all(&bytes))
             .await
             .map_err(|_| "The local IPC request timed out")?
@@ -386,4 +412,101 @@ pub(crate) fn request(
             }
         }
     })
+}
+
+/// A connected instance may be busy for the brief interval before the listener
+/// creates its next instance. Retry only that Windows error, within the caller's
+/// deadline; a missing endpoint still fails immediately.
+async fn connect(
+    name: &str,
+    timeout: Duration,
+) -> Result<tokio::net::windows::named_pipe::NamedPipeClient, String> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match ClientOptions::new().open(name) {
+            Ok(stream) => return Ok(stream),
+            Err(error)
+                if error.raw_os_error()
+                    == Some(windows_sys::Win32::Foundation::ERROR_PIPE_BUSY as i32)
+                    && Instant::now() < deadline =>
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            Err(_) => return Err(
+                "Agent HUD Next is not listening; enable the requested local service in Settings"
+                    .into(),
+            ),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn private_pipe_round_trip_and_exclusive_owner() {
+        let temp = tempfile::tempdir().unwrap();
+        let handler: Handler = Arc::new(|message, _| Some(message));
+        let server = Server::start(temp.path(), "test", 1024, 1024, handler.clone()).unwrap();
+        assert!(server.is_listening());
+        assert!(Server::start(temp.path(), "test", 1024, 1024, handler).is_err());
+        let message = json!({"text": "请求 C:\\my project", "empty": ""});
+        assert_eq!(
+            request(
+                temp.path(),
+                "test",
+                &message,
+                1024,
+                Duration::from_secs(2),
+                || false
+            )
+            .unwrap(),
+            Some(message)
+        );
+    }
+
+    #[test]
+    fn saturated_pipe_shutdown_cancels_waiting_approvals() {
+        let temp = tempfile::tempdir().unwrap();
+        let started = Arc::new(AtomicUsize::new(0));
+        let count = started.clone();
+        let handler: Handler = Arc::new(move |_, active| {
+            count.fetch_add(1, Ordering::Release);
+            while active.load(Ordering::Acquire) {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            None
+        });
+        let server = Server::start(temp.path(), "saturated", 1024, 1024, handler).unwrap();
+        let name = name(temp.path(), "saturated").unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let _clients = runtime.block_on(async {
+            let mut clients = Vec::new();
+            for _ in 0..64 {
+                let mut client = connect(&name, Duration::from_secs(5)).await.unwrap();
+                client.write_all(b"{}\n").await.unwrap();
+                clients.push(client);
+            }
+            clients
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while started.load(Ordering::Acquire) < 63 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(started.load(Ordering::Acquire), 63);
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        std::thread::spawn(move || {
+            drop(server);
+            let _ = sender.send(());
+        });
+        receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("saturated server must stop");
+    }
 }

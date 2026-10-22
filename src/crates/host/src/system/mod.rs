@@ -8,6 +8,8 @@ use tauri::Manager;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(unix)]
+mod unix;
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "linux")]
@@ -30,6 +32,20 @@ pub(crate) fn cli_candidates(
 /// A new file only this user can read, where the host has file modes.
 pub(crate) fn private_output(options: &mut std::fs::OpenOptions) {
     target::private_output(options)
+}
+
+/// A command the user can copy into the host's normal interactive shell.
+pub(crate) fn client_command_line(arguments: &[String]) -> String {
+    target::client_command_line(arguments)
+}
+
+/// Client setup runs in the background even when its executable is a console app.
+pub(crate) fn configure_client_command(command: &mut std::process::Command) {
+    target::configure_client_command(command)
+}
+
+pub(crate) fn stop_client(child: &mut std::process::Child) {
+    target::stop_client(child)
 }
 
 #[derive(Default)]
