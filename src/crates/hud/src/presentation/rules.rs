@@ -975,7 +975,7 @@ pub fn resting_agents(snapshot: &Value, mode: &str, now: i64) -> Vec<String> {
             (now <= at + QUEUE_RECENCY_MS && live).then_some((at, source))
         })
         .collect();
-    recent.sort_by(|a, b| b.0.cmp(&a.0));
+    recent.sort_by_key(|a| std::cmp::Reverse(a.0));
     for (_, source) in recent {
         add(source);
     }

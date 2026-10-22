@@ -23,6 +23,17 @@ fn token(host: &dyn Host) -> Option<String> {
             return Some(s);
         }
     }
+    // On Windows the empty-user credential is a global compatibility slot.
+    // An explicitly selected hosts.yml token must win over another config's
+    // last active keyring login, as it does in GitHub CLI itself.
+    if host.os() == crate::Os::Windows {
+        file_token(host).or_else(|| stored_token(host))
+    } else {
+        stored_token(host).or_else(|| file_token(host))
+    }
+}
+
+fn stored_token(host: &dyn Host) -> Option<String> {
     // gh keeps its token in the system credential store when it can. Where
     // this OS's store is not read yet, hosts.yml is the only place left.
     if let Answer::Found(value) = host.secret(STORED_TOKEN) {
@@ -38,6 +49,10 @@ fn token(host: &dyn Host) -> Option<String> {
             return Some(value);
         }
     }
+    None
+}
+
+fn file_token(host: &dyn Host) -> Option<String> {
     let directory = host
         .env("GH_CONFIG_DIR")
         .filter(|value| !value.is_empty())
@@ -314,6 +329,26 @@ mod tests {
         host.env.remove("XDG_CONFIG_HOME");
         host.os = crate::Os::MacOs;
         assert_eq!(token(&host).as_deref(), Some("home"));
+    }
+
+    #[test]
+    fn windows_selected_config_token_precedes_the_global_keyring_slot() {
+        let mut host = FakeHost::new("/home/u")
+            .env("GH_CONFIG_DIR", "/selected")
+            .file(
+                "/selected/hosts.yml",
+                "github.com:\n  oauth_token: selected-account\n",
+            );
+        host.os = crate::Os::Windows;
+        host.secrets
+            .insert(STORED_TOKEN.into(), Answer::Found("global-account".into()));
+        assert_eq!(token(&host).as_deref(), Some("selected-account"));
+        host.env
+            .insert("GH_TOKEN".into(), "environment-account".into());
+        assert_eq!(token(&host).as_deref(), Some("environment-account"));
+        host.env.remove("GH_TOKEN");
+        host.files.clear();
+        assert_eq!(token(&host).as_deref(), Some("global-account"));
     }
 
     #[test]
