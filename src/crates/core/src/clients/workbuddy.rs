@@ -95,6 +95,7 @@ pub(crate) fn ceiling_quotas<'a>(
                 "usedPercent": 100.0,
                 "resetAt": DateTime::<Utc>::from_timestamp_millis(hit.reset_ms).map(|d| d.to_rfc3339()),
                 "observedAt": DateTime::<Utc>::from_timestamp_millis(hit.observed_ms).map(|d| d.to_rfc3339()),
+                "allModels": false,
                 "windowDurationSeconds": window_duration_seconds(&hit.window),
                 "status": "critical",
             })

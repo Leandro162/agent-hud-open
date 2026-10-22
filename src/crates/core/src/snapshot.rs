@@ -109,6 +109,7 @@ impl crate::AgentHudCore {
         self.settings.to_string().hash(&mut hash);
         self.source_notice.hash(&mut hash);
         self.storage_issue.hash(&mut hash);
+        self.reads.pending.len().hash(&mut hash);
         (
             self.usage_projection.is_none(),
             self.meters.view.is_none(),
@@ -213,6 +214,14 @@ impl crate::AgentHudCore {
         let approvals = self.requests.views(now);
         let providers = self.provider_rows();
         let pending_meter = self.pending_meter_bounds();
+        // Pausing a failed read stops the indexing timer, but does not make
+        // its unread history complete. Consumers use this fact, not notices.
+        let indexing = json!({
+            "complete": self.database.is_some()
+                && self.storage_issue.is_none()
+                && self.reads.pending.is_empty(),
+            "pending": self.reads.pending.len(),
+        });
         let quotas = self.quota_rows(at, now, &pending_meter);
         let billing = self.billing_rows(at, &pending_meter);
         let accounts = self.account_rows();
@@ -225,7 +234,7 @@ impl crate::AgentHudCore {
             .as_ref()
             .expect("usage projection prepared");
         Ok(
-            json!({"islandEvents":island_events,"schemaVersion":1,"statisticsRevision":self.statistics.revision,"sessionsRevision":self.sessions_revision,"sessionScope":"recent","generatedAt":Utc::now().to_rfc3339(),"mode":if self.demo{"demo"}else{"live"},"connection":{"status":"connected","platform":self.platform,"message":notice.unwrap_or_else(|| l10n::text("本机会话日志与客户端事件；回调连接状态另行显示", "Local transcripts and client events; hook connection status is reported separately."))},"totals":projection.totals.json(),"quotas":quotas,"accounts":accounts,"sessions":sessions,"timeline":projection.timeline,"providers":providers,"approvals":approvals,"requestDeliveries":deliveries,"settings":self.settings,"language":if crate::l10n::chinese(){"zh"}else{"en"},"capabilities":serde_json::from_str::<Value>(include_str!("../../../packages/protocol/capabilities.json")).expect("checked-in capability manifest"),"billing":billing}),
+            json!({"islandEvents":island_events,"schemaVersion":1,"statisticsRevision":self.statistics.revision,"sessionsRevision":self.sessions_revision,"sessionScope":"recent","indexing":indexing,"generatedAt":Utc::now().to_rfc3339(),"mode":if self.demo{"demo"}else{"live"},"connection":{"status":"connected","platform":self.platform,"message":notice.unwrap_or_else(|| l10n::text("本机会话日志与客户端事件；回调连接状态另行显示", "Local transcripts and client events; hook connection status is reported separately."))},"totals":projection.totals.json(),"quotas":quotas,"accounts":accounts,"sessions":sessions,"timeline":projection.timeline,"providers":providers,"approvals":approvals,"requestDeliveries":deliveries,"settings":self.settings,"language":if crate::l10n::chinese(){"zh"}else{"en"},"capabilities":serde_json::from_str::<Value>(include_str!("../../../packages/protocol/capabilities.json")).expect("checked-in capability manifest"),"billing":billing}),
         )
     }
 
@@ -532,13 +541,7 @@ impl crate::AgentHudCore {
                     );
                 }
                 if let Some(object) = row.as_object_mut() {
-                    for key in [
-                        "legacyWindowId",
-                        "consumerSource",
-                        "modelFamilies",
-                        "allModels",
-                        "windowDurationSeconds",
-                    ] {
+                    for key in ["legacyWindowId", "consumerSource", "modelFamilies"] {
                         object.remove(key);
                     }
                 }
@@ -550,14 +553,11 @@ impl crate::AgentHudCore {
                 .settings_path
                 .parent()
                 .map(|dir| dir.join("workbuddy-ceilings.json"));
-            for mut row in crate::clients::workbuddy::ceiling_quotas(
+            for row in crate::clients::workbuddy::ceiling_quotas(
                 self.logs.values(),
                 cache_path.as_deref(),
                 now,
             ) {
-                if let Some(object) = row.as_object_mut() {
-                    object.remove("windowDurationSeconds");
-                }
                 quotas.push(row);
             }
         }

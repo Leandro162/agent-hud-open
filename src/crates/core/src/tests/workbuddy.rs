@@ -114,4 +114,6 @@ fn workbuddy_ceilings_metering_and_account_session_records() {
     assert_eq!(quotas[0]["id"], "workbuddy:limit:glm-5:5h");
     assert_eq!(quotas[0]["name"], "glm-5 (WorkBuddy) · 5-hour usage limit");
     assert_eq!(quotas[0]["usedPercent"], 100.0);
+    assert_eq!(quotas[0]["allModels"], false);
+    assert_eq!(quotas[0]["windowDurationSeconds"], 18_000.0);
 }

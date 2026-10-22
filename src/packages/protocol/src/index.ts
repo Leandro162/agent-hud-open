@@ -27,6 +27,10 @@ export interface Quota {
   /** Core's short name for tight places: distinct among the account's
    * windows, else the full name. Shown where the full name does not fit. */
   shortLabel?: string;
+  /** Whether this window covers every model, as the account reader reports. */
+  allModels?: boolean;
+  /** The source's fixed window length; absent/null when it does not report one. */
+  windowDurationSeconds?: number | null;
   usedPercent: number | null;
   resetAt: string | null;
   status: "normal" | "warning" | "critical" | "stale";
@@ -502,6 +506,8 @@ export interface Snapshot {
   sessionsRevision?: number;
   /** The broadcast contains HUD-relevant sessions; history is queried separately. */
   sessionScope?: "recent";
+  /** Unread history stays incomplete even while a failed read is paused. */
+  indexing?: { complete: boolean; pending: number };
   mode: "live" | "demo";
   connection: {
     status: "connected" | "disconnected" | "loading";

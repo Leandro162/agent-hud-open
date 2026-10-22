@@ -101,6 +101,8 @@ fn logs_last_written_over_31_days_ago_are_not_read_and_keep_what_they_counted() 
         "a pass reads only part of a long log"
     );
     assert!(backend.indexing(), "the rest waits for the next pass");
+    assert_eq!(snapshot["indexing"]["complete"], false);
+    assert_eq!(snapshot["indexing"]["pending"], 1);
     assert_eq!(snapshot["totals"]["total"], 13 + 3 * 13);
     let snapshot = backend.request("refresh", json!({})).unwrap();
     assert_eq!(
@@ -109,6 +111,7 @@ fn logs_last_written_over_31_days_ago_are_not_read_and_keep_what_they_counted() 
         "a log within the retention is read to its end"
     );
     assert!(!backend.indexing());
+    assert_eq!(snapshot["indexing"], json!({"complete":true,"pending":0}));
 }
 
 #[test]
@@ -197,6 +200,8 @@ fn turn_text_stays_in_memory_and_a_relaunch_starts_without_it() {
 fn a_log_that_cannot_be_read_waits_out_a_pause_and_is_not_waited_for() {
     let temp = tempfile::tempdir().unwrap();
     let mut backend = fixture(temp.path());
+    let complete = backend.request("snapshot", json!({})).unwrap();
+    assert_eq!(complete["indexing"]["complete"], true);
     let path = temp.path().join(".claude/projects/test/locked.jsonl");
     backend.reads.pending.insert(path.clone());
     assert!(backend.indexing());
@@ -211,6 +216,14 @@ fn a_log_that_cannot_be_read_waits_out_a_pause_and_is_not_waited_for() {
     );
     assert!(!backend.reads.failed.pausing(&path, now + 30_000));
     assert!(!backend.indexing(), "a pausing log is not waited for");
+    let snapshot = backend
+        .request("request_snapshot", json!({"changesOnly":true}))
+        .unwrap();
+    assert_eq!(
+        snapshot["indexing"],
+        json!({"complete":false,"pending":1}),
+        "pausing a read changes scheduling, not history completeness"
+    );
     backend
         .reads
         .failed
