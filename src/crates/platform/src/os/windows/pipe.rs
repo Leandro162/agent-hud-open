@@ -218,8 +218,8 @@ fn pipe(name: &str, first: bool) -> Result<NamedPipeServer, String> {
     }
     .map_err(|_| "The local named-pipe endpoint is occupied or unavailable".into())
 }
-pub(crate) type Handler = Arc<dyn Fn(Value, &AtomicBool) -> Option<Value> + Send + Sync>;
-pub(crate) struct Server {
+pub type Handler = Arc<dyn Fn(Value, &AtomicBool) -> Option<Value> + Send + Sync>;
+pub struct Server {
     running: Arc<AtomicBool>,
     stop: watch::Sender<bool>,
     thread: Option<JoinHandle<()>>,
@@ -375,23 +375,18 @@ async fn serve(
         }
     }
 }
-pub(crate) fn request(
+pub fn request(
     data: &Path,
     channel: &str,
     message: &Value,
-    limit: usize,
+    request_limit: usize,
+    response_limit: usize,
     timeout: Duration,
     mut settled: impl FnMut() -> bool,
 ) -> Result<Option<Value>, String> {
     let mut bytes = serde_json::to_vec(message).map_err(|_| "Invalid local IPC request")?;
     bytes.push(b'\n');
-    if bytes.len()
-        > if channel == "tools" {
-            crate::local_tools::REQUEST_LIMIT as usize
-        } else {
-            1024 * 1024
-        }
-    {
+    if bytes.len() > request_limit {
         return Err("The local IPC request is too large".into());
     }
     let name = name(data, channel)?;
@@ -426,7 +421,7 @@ pub(crate) fn request(
                 }
                 Ok(Ok(n)) => {
                     response.extend_from_slice(&chunk[..n]);
-                    if response.len() > limit {
+                    if response.len() > response_limit {
                         return Err("The local IPC response is too large".into());
                     }
                     if response.last() == Some(&b'\n') {
@@ -500,6 +495,7 @@ mod tests {
                 &data,
                 "test",
                 &message,
+                1024,
                 1024,
                 Duration::from_secs(2),
                 || false

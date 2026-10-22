@@ -73,17 +73,23 @@ qualify desktop focus, display, client, or network behavior.
   installed through an npm `.cmd` shim; verify requests reach the running app.
 - Try HUD hover, passthrough and dragging with normal and swapped mouse buttons,
   mixed display scaling, a disconnected/reconnected monitor and tray actions.
+  Save different placements on two displays, restart with their enumeration order
+  changed, and check placements follow each monitor's Windows device path. Mirrored
+  and remote displays without a unique device path retain session-only identity.
 - For the private product, pair over LAN, restart, reconnect, revoke, and confirm
   the certificate fingerprint survives restart.
 - Check HUD alerts and the current-user login item. With both products installed,
   verify that enabling or disabling one product's login item leaves the other
   product's entry unchanged.
 
-Codex Desktop's private Windows IPC, persistent physical-display IDs, native
-keyboard focus handoff and all-virtual-desktop/exclusive-fullscreen behavior are
-still outside the implemented Windows capability set. The private product's
-CloudKit backend remains macOS-only. See its Windows build notes for the private
-installer workflow and remaining remote-control limitations.
+Monitor device-path identity and the private product's Remote callback pipe are
+implemented; native keyboard focus handoff and all-virtual-desktop/exclusive-
+fullscreen behavior remain outside the Windows capability set. The private
+product's CloudKit backend remains macOS-only. See its Windows build notes for
+the private installer workflow and remaining remote-control limitations.
+Codex Desktop's shared Windows transport supports private explicit owner RPC;
+the public background Desktop observer and CLI daemon-origin discovery remain
+Unix-only. Real Desktop interoperability still needs Windows acceptance.
 
 ## Shared readers and OS-specific operations
 
