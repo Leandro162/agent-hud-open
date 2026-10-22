@@ -7,41 +7,59 @@
 //! another build that holds the lock, such as a test build while the
 //! installed one runs, says which one runs, as agent-hud-native-open does. Demos
 //! take no lock: they keep their own preferences and collect nothing.
-use agent_hud_runtime::instance::{self, Claim, InstanceLock};
+use agent_hud_runtime::instance::{self, CollectorError, CollectorLocks};
 use std::path::{Path, PathBuf};
 
 pub(crate) enum Launch {
-    /// Run, keeping the lock (None when no lock could be taken here).
-    Run(Option<InstanceLock>),
+    /// Run only while every resource lock remains owned.
+    Run(CollectorLocks),
     /// This executable already runs: the lock to ask it to come forward at.
     HandOver(PathBuf),
     /// Another build runs; the executable it runs, when the lock names it.
     Refused(Option<PathBuf>),
+    /// Collection cannot safely start without exclusive resource ownership.
+    Unavailable(String),
 }
 
 pub(crate) fn claim(owns_hooks: bool) -> Launch {
-    let path = match agent_hud_runtime::instance_lock(owns_hooks) {
-        Ok(path) => path,
-        Err(error) => {
-            eprintln!("No instance lock: {error}");
-            return Launch::Run(None);
-        }
-    };
     let executable = std::env::current_exe().ok();
-    match instance::claim(&path, executable.as_deref()) {
-        Claim::Acquired(lock) => Launch::Run(Some(lock)),
-        Claim::Unavailable(error) => {
-            eprintln!("No instance lock at {error}");
-            Launch::Run(None)
-        }
+    launch(
+        agent_hud_runtime::claim_collector(owns_hooks, executable.as_deref()),
+        executable.as_deref(),
+    )
+}
+
+fn launch(result: Result<CollectorLocks, CollectorError>, executable: Option<&Path>) -> Launch {
+    match result {
+        Ok(locks) => Launch::Run(locks),
+        Err(CollectorError::Unavailable(error)) => Launch::Unavailable(error),
         // A holder that cannot be named (not written yet, or unreadable while
         // locked on Windows) is taken to be this executable.
-        Claim::Held(None) => Launch::HandOver(path),
-        Claim::Held(Some(holder)) if same_file(&holder, executable.as_deref()) => {
-            Launch::HandOver(path)
-        }
-        Claim::Held(Some(holder)) => Launch::Refused(Some(holder)),
+        Err(CollectorError::Held {
+            path,
+            executable: None,
+        }) => Launch::HandOver(path),
+        Err(CollectorError::Held {
+            path,
+            executable: Some(holder),
+        }) if same_file(&holder, executable) => Launch::HandOver(path),
+        Err(CollectorError::Held { executable, .. }) => Launch::Refused(executable),
     }
+}
+
+pub(crate) fn unavailable(error: &str) {
+    let chinese = crate::shell::system_prefers_chinese();
+    let title = if chinese {
+        "Agent HUD 无法启动"
+    } else {
+        "Agent HUD could not start"
+    };
+    let body = if chinese {
+        format!("无法独占使用数据目录或客户端回调，采集未启动。\n{error}")
+    } else {
+        format!("The data directory or client hooks could not be locked exclusively. Collection has not started.\n{error}")
+    };
+    crate::shell::alert(title, &body, "OK");
 }
 
 fn same_file(a: &Path, b: Option<&Path>) -> bool {
@@ -103,22 +121,37 @@ mod tests {
     #[test]
     fn a_second_launch_hands_over_to_this_executable_and_refuses_another_build() {
         let temp = tempfile::tempdir().unwrap();
-        std::env::set_var("AGENTHUD_NEXT_DATA_DIR", temp.path());
-        let Launch::Run(Some(_lock)) = claim(false) else {
+        let data = temp.path().join("instance.lock");
+        let executable = std::env::current_exe().unwrap();
+        let take = || {
+            launch(
+                instance::claim_collector(&data, None, Some(&executable)),
+                Some(&executable),
+            )
+        };
+        let Launch::Run(lock) = take() else {
             panic!("the first copy runs and keeps the lock");
         };
         assert!(
-            matches!(claim(false), Launch::HandOver(_)),
+            matches!(take(), Launch::HandOver(path) if path == data),
             "the same executable comes forward"
         );
-        // Another build's name in the lock. Windows keeps others from writing
-        // a locked file, and from reading it, so there it stays a hand-over.
-        let other = "/Applications/Agent HUD.app/Contents/MacOS/Agent HUD";
-        if std::fs::write(temp.path().join("instance.lock"), other).is_ok() {
-            match claim(false) {
-                Launch::Refused(Some(holder)) => assert_eq!(holder, Path::new(other)),
-                _ => panic!("another build is named and refused"),
-            }
+        drop(lock);
+        let other = Path::new("/Applications/Agent HUD.app/Contents/MacOS/Agent HUD");
+        let _other = instance::claim_collector(&data, None, Some(other)).unwrap();
+        match take() {
+            Launch::Refused(Some(holder)) => assert_eq!(holder, other),
+            // Windows may keep the locked file's executable from being read.
+            Launch::HandOver(path) if instance::holder(&data).is_none() => assert_eq!(path, data),
+            _ => panic!("another build is named and refused"),
         }
+    }
+
+    #[test]
+    fn a_lock_failure_does_not_start_the_app() {
+        assert!(matches!(
+            launch(Err(CollectorError::Unavailable("fixture".into())), None),
+            Launch::Unavailable(error) if error == "fixture"
+        ));
     }
 }

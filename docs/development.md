@@ -32,6 +32,15 @@ src/
 
 The root holds workspace manifests, lockfiles, documentation and build configuration. Rust `core` does not depend on Tauri, Swift, React or system frameworks. OS-specific operations belong to `platform`; desktop and MCP do not implement their own transcript readers or state machines. The desktop embeds one `runtime`. MCP’s engine relay attaches to that running application’s local channel and never starts another collector; the browser development adapter uses a standalone engine.
 
+Every native app and standalone engine takes the data directory's exclusive
+lock before opening its database. A build that owns client hooks also takes
+their shared lock; owning hooks never replaces the data lock. A second native
+launch of the same executable brings the running app forward. An occupied or
+unavailable lock prevents another collector from starting. To use browser
+development while the native app runs, give the development engine its own
+`AGENTHUD_NEXT_DATA_DIR`. The MCP app-channel relay takes neither lock and
+creates no collector.
+
 ## Run the workspace
 
 Use Node.js 24+ and a current stable Rust toolchain. Dependency versions are pinned in `pnpm-lock.yaml` and `Cargo.lock`.

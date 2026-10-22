@@ -19,16 +19,16 @@ pub use agent_hud_platform::instance;
 pub use agent_hud_platform::local_tools;
 pub use agent_hud_platform::CollectionGate;
 
-/// The lock this copy claims at launch (`instance`): the one every Agent HUD
-/// meets when this copy owns client hooks, else its own data directory's, so
-/// a preview that installs no hooks can run beside a release.
-pub fn instance_lock(owns_hooks: bool) -> Result<PathBuf, String> {
-    let platform = NativePlatform::new()?;
-    Ok(if owns_hooks {
-        platform.shared_instance_lock()
-    } else {
-        platform.instance_lock()
-    })
+/// Every collecting entry point claims the data directory before constructing
+/// a Runtime. Owning client hooks additionally claims their shared resource.
+/// A preview may run beside a release only with a separate data directory.
+pub fn claim_collector(
+    owns_hooks: bool,
+    executable: Option<&std::path::Path>,
+) -> Result<instance::CollectorLocks, instance::CollectorError> {
+    let platform = NativePlatform::new().map_err(instance::CollectorError::Unavailable)?;
+    let hooks = owns_hooks.then(|| platform.shared_instance_lock());
+    instance::claim_collector(&platform.instance_lock(), hooks.as_deref(), executable)
 }
 
 /// Path discovery only: a tools client must never construct a data collector.

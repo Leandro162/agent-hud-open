@@ -767,7 +767,7 @@ pub fn run_with_options(
         None
     } else {
         match instance::claim(options.canonical_executable.is_some()) {
-            instance::Launch::Run(lock) => lock,
+            instance::Launch::Run(locks) => Some(locks),
             instance::Launch::HandOver(lock) => {
                 if !instance::hand_over(&lock) {
                     instance::refuse(None);
@@ -777,6 +777,10 @@ pub fn run_with_options(
             instance::Launch::Refused(holder) => {
                 instance::refuse(holder.as_deref());
                 std::process::exit(0);
+            }
+            instance::Launch::Unavailable(error) => {
+                instance::unavailable(&error);
+                std::process::exit(2);
             }
         }
     };

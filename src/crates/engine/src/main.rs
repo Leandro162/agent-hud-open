@@ -13,6 +13,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
+    let executable = std::env::current_exe().ok();
+    let _ownership = if app_channel {
+        None
+    } else {
+        Some(agent_hud_runtime::claim_collector(
+            false,
+            executable.as_deref(),
+        )?)
+    };
     // App-channel mode is a transport only. No Runtime, watcher, database or
     // provider job is created, even when the application is absent or tools off.
     let mut runtime = if app_channel {

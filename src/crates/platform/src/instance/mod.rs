@@ -1,9 +1,8 @@
-//! The lock that lets one copy of the app run at a time.
+//! Exclusive ownership of the collector's data and, separately, client hooks.
 //!
-//! A copy that runs collects into its data directory and, when it owns client
-//! hooks, points every client's hooks at itself, so a second copy would write
-//! the same database and take the hooks from under the first. The lock is an
-//! advisory whole-file lock (`flock` on macOS and Linux, `LockFileEx` on
+//! Every collector holds its data directory's lock. A hook owner also holds
+//! the shared hook lock, even when its data lives elsewhere. The locks are
+//! advisory whole-file locks (`flock` on macOS and Linux, `LockFileEx` on
 //! Windows), the same kind agent-hud-native-open's `InstanceLock` takes, so the two
 //! apps see each other's. The system lets go of it when the process ends,
 //! also when it crashes, so a copy that is gone never keeps another from
@@ -34,9 +33,77 @@ pub enum Claim {
     Acquired(InstanceLock),
     /// Another process holds it: the executable it runs, if the lock names it.
     Held(Option<PathBuf>),
-    /// No lock could be taken here; the app runs without one rather than not
-    /// at all.
+    /// No lock could be taken here; collection must not start.
     Unavailable(String),
+}
+
+/// A collector always owns its data; hooks are an additional shared resource.
+pub struct CollectorLocks {
+    data: InstanceLock,
+    hooks: Option<InstanceLock>,
+}
+
+#[derive(Debug)]
+pub enum CollectorError {
+    Held {
+        path: PathBuf,
+        executable: Option<PathBuf>,
+    },
+    Unavailable(String),
+}
+
+impl std::fmt::Display for CollectorError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Held { path, executable } => {
+                write!(formatter, "Agent HUD already owns {}", path.display())?;
+                if let Some(executable) = executable {
+                    write!(formatter, " ({})", application(executable).display())?;
+                }
+                Ok(())
+            }
+            Self::Unavailable(error) => {
+                write!(formatter, "Agent HUD could not take its lock: {error}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for CollectorError {}
+
+/// The data owner and, when present, hook owner, with their hand-over endpoints.
+pub struct Collecting {
+    _data: Running,
+    _hooks: Option<Running>,
+}
+
+impl CollectorLocks {
+    pub fn listen(self, on_show: OnShow) -> Collecting {
+        Collecting {
+            _data: self.data.listen(Arc::clone(&on_show)),
+            _hooks: self.hooks.map(|lock| lock.listen(on_show)),
+        }
+    }
+}
+
+/// Claim every resource before a Runtime opens its database. Failure to claim
+/// hooks drops the already-acquired data lock, so another collector may use it.
+pub fn claim_collector(
+    data: &Path,
+    hooks: Option<&Path>,
+    executable: Option<&Path>,
+) -> Result<CollectorLocks, CollectorError> {
+    let take = |path: &Path| match claim(path, executable) {
+        Claim::Acquired(lock) => Ok(lock),
+        Claim::Held(executable) => Err(CollectorError::Held {
+            path: path.to_owned(),
+            executable,
+        }),
+        Claim::Unavailable(error) => Err(CollectorError::Unavailable(error)),
+    };
+    let data = take(data)?;
+    let hooks = hooks.map(take).transpose()?;
+    Ok(CollectorLocks { data, hooks })
 }
 
 pub struct InstanceLock {
@@ -216,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn a_lock_that_cannot_be_made_lets_the_app_run() {
+    fn a_lock_that_cannot_be_made_is_unavailable() {
         let temp = tempfile::tempdir().unwrap();
         let file = temp.path().join("file");
         fs::write(&file, "").unwrap();
@@ -224,5 +291,73 @@ mod tests {
             claim(&file.join("instance.lock"), None),
             Claim::Unavailable(_)
         ));
+    }
+
+    #[test]
+    fn every_collector_claims_its_data_with_or_without_hooks() {
+        for first_hooks in [false, true] {
+            for second_hooks in [false, true] {
+                let temp = tempfile::tempdir().unwrap();
+                let data = temp.path().join("data/instance.lock");
+                let hooks = temp.path().join("hooks/instance.lock");
+                let _first =
+                    claim_collector(&data, first_hooks.then_some(hooks.as_path()), None).unwrap();
+                assert!(matches!(
+                    claim_collector(&data, second_hooks.then_some(hooks.as_path()), None),
+                    Err(CollectorError::Held { path, .. }) if path == data
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn separate_data_collectors_coexist_but_share_one_hook_owner() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = temp.path().join("first/instance.lock");
+        let second = temp.path().join("second/instance.lock");
+        let hooks = temp.path().join("hooks/instance.lock");
+        let _first = claim_collector(&first, Some(&hooks), None).unwrap();
+        let second_owner = claim_collector(&second, None, None).unwrap();
+        drop(second_owner);
+        assert!(matches!(
+            claim_collector(&second, Some(&hooks), None),
+            Err(CollectorError::Held { path, .. }) if path == hooks
+        ));
+        // A failed hook claim must release the data lock it took first.
+        let _second = claim_collector(&second, None, None).unwrap();
+    }
+
+    #[test]
+    fn an_unavailable_resource_never_leaves_a_partial_owner() {
+        let temp = tempfile::tempdir().unwrap();
+        let data = temp.path().join("data/instance.lock");
+        let file = temp.path().join("file");
+        fs::write(&file, "").unwrap();
+        let unavailable = file.join("instance.lock");
+        assert!(matches!(
+            claim_collector(&unavailable, None, None),
+            Err(CollectorError::Unavailable(_))
+        ));
+        assert!(matches!(
+            claim_collector(&data, Some(&unavailable), None),
+            Err(CollectorError::Unavailable(_))
+        ));
+        let _owner = claim_collector(&data, None, None).unwrap();
+    }
+
+    #[test]
+    fn both_owned_resources_hand_over_to_the_same_app() {
+        let temp = tempfile::tempdir().unwrap();
+        let data = temp.path().join("data/instance.lock");
+        let hooks = temp.path().join("hooks/instance.lock");
+        let owner = claim_collector(&data, Some(&hooks), None).unwrap();
+        let shown = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count = Arc::clone(&shown);
+        let _running = owner.listen(Arc::new(move || {
+            count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }));
+        assert!(hand_over(&data));
+        assert!(hand_over(&hooks));
+        assert_eq!(shown.load(std::sync::atomic::Ordering::SeqCst), 2);
     }
 }
