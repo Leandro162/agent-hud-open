@@ -16,6 +16,8 @@ struct Parent {
     command: String,
 }
 
+const MAX_OUTPUT_BYTES: u64 = 1024 * 1024;
+
 pub(crate) fn parent_processes() -> Vec<ProcessAncestor> {
     let Some(system) = std::env::var_os("SystemRoot") else {
         return Vec::new();
@@ -39,34 +41,28 @@ pub(crate) fn parent_processes() -> Vec<ProcessAncestor> {
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
     std::thread::spawn(move || {
         let mut bytes = Vec::new();
-        let result = stdout.take(1024 * 1024 + 1).read_to_end(&mut bytes);
-        let _ = sender.send((result, bytes));
+        let _ = stdout.take(MAX_OUTPUT_BYTES).read_to_end(&mut bytes);
+        let _ = sender.send(bytes);
     });
     let deadline = Instant::now() + Duration::from_secs(5);
-    let success = loop {
+    loop {
         match child.try_wait() {
-            Ok(Some(status)) => break status.success(),
+            Ok(Some(_)) => break,
             Ok(None) if Instant::now() < deadline => {
                 std::thread::sleep(Duration::from_millis(10));
             }
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
-                break false;
+                break;
             }
         }
-    };
-    let Ok((Ok(_), bytes)) = receiver.recv_timeout(Duration::from_millis(100)) else {
-        return Vec::new();
-    };
-    if !success || bytes.len() > 1024 * 1024 {
-        return Vec::new();
     }
-    String::from_utf8_lossy(&bytes)
-        .lines()
-        .take(16)
-        .map_while(|line| {
-            let parent = serde_json::from_str::<Parent>(line).ok()?;
+    let Ok(bytes) = receiver.recv_timeout(Duration::from_millis(100)) else {
+        return Vec::new();
+    };
+    parents(&bytes)
+        .map_while(|parent| {
             Some(ProcessAncestor {
                 executable: parent.executable,
                 arguments: arguments(&parent.command)?,
@@ -74,6 +70,21 @@ pub(crate) fn parent_processes() -> Vec<ProcessAncestor> {
             })
         })
         .collect()
+}
+
+/// Each completed record was checked for same-user ownership and PID reuse by
+/// the script before it was emitted. Keep that prefix even if a later query
+/// fails or times out; a partial or malformed record ends the trusted chain.
+fn parents(bytes: &[u8]) -> impl Iterator<Item = Parent> + '_ {
+    bytes
+        .split_inclusive(|byte| *byte == b'\n')
+        .take(16)
+        .map_while(|line| {
+            if line.last() != Some(&b'\n') {
+                return None;
+            }
+            serde_json::from_slice(line).ok()
+        })
 }
 
 /// Decode the command line using Windows' native quoting rules.
@@ -123,6 +134,36 @@ mod tests {
     use super::*;
 
     #[test]
+    fn ancestry_keeps_complete_records_before_a_partial_record() {
+        let first = br#"{"executable":"C:\\first.exe","command":"first.exe"}"#;
+        let second = br#"{"executable":"C:\\second.exe","command":"second.exe"}"#;
+        let mut bytes = first.to_vec();
+        bytes.extend_from_slice(b"\r\n");
+        bytes.extend_from_slice(second);
+        bytes.push(b'\n');
+        // A syntactically valid JSON object without its line terminator is
+        // still incomplete: the query may have been cut off during output.
+        bytes.extend_from_slice(first);
+        let parsed = parents(&bytes).collect::<Vec<_>>();
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].executable, PathBuf::from(r"C:\first.exe"));
+        assert_eq!(parsed[1].command, "second.exe");
+        assert_eq!(parents(&bytes[..bytes.len() - 5]).count(), 2);
+    }
+
+    #[test]
+    fn ancestry_stops_at_invalid_json_or_utf8_without_skipping_ancestors() {
+        let valid = b"{\"executable\":\"parent.exe\",\"command\":\"parent.exe\"}\n";
+        for invalid in [b"{broken}\n".as_slice(), b"\xff\n"] {
+            let mut bytes = valid.to_vec();
+            bytes.extend_from_slice(invalid);
+            bytes.extend_from_slice(valid);
+            assert_eq!(parents(&bytes).count(), 1);
+        }
+        assert_eq!(parents(&valid.repeat(17)).count(), 16);
+    }
+
+    #[test]
     fn native_argv_preserves_unicode_spaces_empty_values_and_backslashes() {
         assert_eq!(
             arguments(
@@ -165,8 +206,10 @@ mod tests {
             .unwrap();
         assert!(
             output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stdout)
+            "child status: {}\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
         );
     }
 }

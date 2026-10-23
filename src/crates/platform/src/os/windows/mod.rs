@@ -1,5 +1,6 @@
 use super::{joined_path, path_entries, variable, Environment, ProcessInfo};
 mod apps;
+mod codex;
 mod files;
 pub(crate) mod pipe;
 mod process;
@@ -51,6 +52,9 @@ fn local_app(home: &Path, env: &Environment) -> PathBuf {
     variable(env, "LOCALAPPDATA", home).unwrap_or_else(|| home.join("AppData/Local"))
 }
 pub(crate) fn application_installed(home: &Path, env: &Environment, name: &str) -> bool {
+    if matches!(name, "Codex" | "ChatGPT") {
+        return codex::installation(home, env).installed;
+    }
     [
         local_app(home, env).join("Programs"),
         variable(env, "ProgramFiles", home).unwrap_or_else(|| PathBuf::from("C:/Program Files")),
@@ -106,15 +110,19 @@ pub(crate) fn is_shell(path: &Path) -> bool {
         })
 }
 pub(crate) fn engine_candidates(home: &Path, env: &Environment, name: &str) -> Vec<PathBuf> {
+    let mut paths = if name == "codex" {
+        codex::installation(home, env).engines
+    } else {
+        Vec::new()
+    };
     let mut dirs = vec![
         home.join(".local/bin"),
         home.join(".bun/bin"),
         home.join(".claude/local"),
     ];
     dirs.extend(executable_dirs(home, env));
-    dirs.into_iter()
-        .map(|dir| dir.join(format!("{name}.exe")))
-        .collect()
+    paths.extend(dirs.into_iter().map(|dir| dir.join(format!("{name}.exe"))));
+    paths
 }
 pub(crate) fn engine_path(home: &Path, env: &Environment) -> String {
     joined_path(executable_dirs(home, env))
