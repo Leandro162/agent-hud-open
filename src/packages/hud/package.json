@@ -7,6 +7,7 @@
     "typecheck": "tsc -p ."
   },
   "exports": {
+    "./tokens": "./src/tokens.ts",
     "./BotMark": "./src/BotMark.tsx",
     "./HUDArtwork": "./src/HUDArtwork.tsx",
     "./HUDGlow": "./src/HUDGlow.tsx",

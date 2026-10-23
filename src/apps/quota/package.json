@@ -1,0 +1,28 @@
+{
+  "name": "@agent-hud/quota",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1421 --strictPort",
+    "build": "vite build",
+    "typecheck": "tsc -p .",
+    "test": "node --test test/*.test.mjs",
+    "server": "node server/main.mjs",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@agent-hud/hud": "workspace:*",
+    "@tauri-apps/api": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.3",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

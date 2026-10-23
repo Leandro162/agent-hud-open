@@ -1,0 +1,36 @@
+name: Quota Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [quota-panel]
+    paths:
+      - "src/apps/quota/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/quota-windows.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @agent-hud/quota typecheck
+      - run: pnpm --filter @agent-hud/quota test
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --manifest-path src/apps/quota/src-tauri/Cargo.toml -- --check
+      - run: pnpm --filter @agent-hud/quota tauri build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-hud-quota-windows-test-build
+          path: src/apps/quota/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

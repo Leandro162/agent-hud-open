@@ -143,6 +143,40 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
+  src/apps/quota:
+    dependencies:
+      '@agent-hud/hud':
+        specifier: workspace:*
+        version: link:../../packages/hud
+      '@tauri-apps/api':
+        specifier: 'catalog:'
+        version: 2.12.4
+      react:
+        specifier: 'catalog:'
+        version: 19.3.1
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.1(react@19.3.1)
+    devDependencies:
+      '@tauri-apps/cli':
+        specifier: 2.12.3
+        version: 2.12.3
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.5
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)
+
   src/packages/app:
     dependencies:
       '@agent-hud/hud':

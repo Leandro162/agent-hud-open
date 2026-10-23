@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Agent HUD Quota",
+  "version": "0.1.0",
+  "identifier": "com.leandro.agenthud.quota",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1421",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Agent HUD · 额度",
+        "width": 360,
+        "height": 660,
+        "minWidth": 320,
+        "minHeight": 400,
+        "decorations": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "../../desktop/src-tauri/icons/icon.ico",
+      "../../desktop/src-tauri/icons/icon.png"
+    ]
+  }
+}
