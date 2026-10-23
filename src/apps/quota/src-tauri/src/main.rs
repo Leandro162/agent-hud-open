@@ -15,7 +15,7 @@ async fn quota_snapshot(
     reader: tauri::State<'_, Reader>,
 ) -> Result<serde_json::Value, String> {
     let client = reader.0.lock().map_err(|_| "connection_failed")?.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    Ok(tauri::async_runtime::spawn_blocking(move || {
         // Fixed local endpoint. The desktop never stores server/account secrets
         // and cannot turn this command into a general HTTP or remote-action proxy.
         let request = if refresh {
@@ -32,7 +32,7 @@ async fn quota_snapshot(
             .map_err(|_| "invalid_response")
     })
     .await
-    .map_err(|_| "connection_failed")?
+    .map_err(|_| "connection_failed")??)
 }
 
 fn main() {
