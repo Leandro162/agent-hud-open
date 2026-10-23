@@ -19,7 +19,13 @@ cd C:\Users\Wintools\agent-hud-open
 node src/apps/quota/server/main.mjs
 ```
 
-该进程必须在持有 Codex 登录和 DPAPI 凭据的 Windows 用户下运行。首次联通测试后再配置该用户的登录启动任务，不能改为 SYSTEM 账户。
+该进程必须在持有 Codex 登录和 DPAPI 凭据的 Windows 用户下运行。服务器回环查询验证成功后，可安装该用户的登录启动任务，不能改为 SYSTEM 账户：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File src/apps/quota/scripts/Install-ServerReader.ps1 -StartNow
+```
+
+该任务名为 `Agent HUD Quota Reader`，在当前用户登录后隐藏运行；异常退出一分钟后重启，不限运行时长。远程桌面断开仍继续，注销 Windows 用户后停止。脚本不收集 Windows 密码，不更改系统执行策略；`Bypass` 只适用于本次已核对的本仓库脚本进程。安装前应停止手动启动的读取器，避免端口冲突。
 
 没有 DeepSeek Key 时会独立显示未配置。配置时先检查 `C:\Users\Wintools\credentials\index.json` 及适用凭据管理器；已有适用凭据应先只读验证，不要重复索取。新增凭据可交互运行：
 
@@ -39,7 +45,23 @@ powershell -NoProfile -File src/apps/quota/scripts/Save-DeepseekCredential.ps1
 powershell -NoProfile -File .\Start-LocalTunnel.ps1 -SshAlias quota-server
 ```
 
-脚本使用 StrictHostKeyChecking 和 BatchMode，失败明确退出。隧道需要持续运行；正式后台启动可使用隐藏窗口，但首次主机密钥核验需要交互。休眠/断网后隧道退出应重启；面板继续显示旧值和失联状态。
+脚本使用 StrictHostKeyChecking 和 BatchMode，失败明确退出。隧道需要持续运行；首次主机密钥核验需要交互，不自动接受陌生指纹，不保存密码。
+
+本地测试包解压后，在已经配置好 SSH 密钥登录和已验证主机指纹的前提下，可连接并启动便携面板：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Start-LocalPanel.ps1 -SshAlias quota-server
+```
+
+该脚本先确认隧道真正返回额度接口，再打开面板；失败时清理自己创建的进程。手动隧道断线后须重新启动；面板保留旧值和失联提示。
+
+本地联通验收后，可设置当前 Windows 用户登录时自动启动面板和隧道：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-LocalStartup.ps1 -SshAlias quota-server -PanelPath 'C:\你的面板目录\agent-hud-quota.exe'
+```
+
+任务名为 `Agent HUD Quota Panel` 和 `Agent HUD Quota Tunnel`，隧道失败后一分钟自动重试。不要同时保留手动启动的隧道和自动启动隧道。安装脚本不会覆盖同名既有任务，不包含服务器密码或 API Key。本地任务尚未在用户本机执行和验证。
 
 ## 本地面板
 
@@ -49,7 +71,7 @@ powershell -NoProfile -File .\Start-LocalTunnel.ps1 -SshAlias quota-server
 - 核心数字一直可见，窗口按服务实际数据生成。
 - Dynamic 仅图标轻微呼吸和悬停位移，尊重系统减少动态效果设置。
 - 手动刷新、自动更新、托盘显示/隐藏和退出、窗口置顶。
-- 标准窗口标题栏拖动；开机启动尚未提供界面设置，可在完成本地验证后配置启动快捷方式。
+- 标准窗口标题栏拖动；提供登录自动启动安装脚本，界面中尚无开机启动开关。
 
 ```powershell
 pnpm install --frozen-lockfile

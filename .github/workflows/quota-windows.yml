@@ -40,7 +40,8 @@ jobs:
           New-Item -ItemType Directory quota-artifact | Out-Null
           Copy-Item target/release/bundle/nsis/*.exe quota-artifact/
           Copy-Item target/release/agent-hud-quota.exe quota-artifact/
-          Copy-Item src/apps/quota/scripts/Start-LocalTunnel.ps1 quota-artifact/
+          Copy-Item src/apps/quota/scripts/Start-Local*.ps1 quota-artifact/
+          Copy-Item src/apps/quota/scripts/Install-LocalStartup.ps1 quota-artifact/
           Copy-Item docs/quota-panel.md quota-artifact/README.md
       - uses: actions/upload-artifact@v4
         with:
