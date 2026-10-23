@@ -32,7 +32,8 @@ jobs:
         with:
           workspaces: src/apps/quota/src-tauri -> target
           cache-on-failure: true
-      - run: pnpm --filter @agent-hud/quota tauri build -- --locked
+      - run: cargo metadata --manifest-path src/apps/quota/src-tauri/Cargo.toml --locked --no-deps --format-version 1
+      - run: pnpm --filter @agent-hud/quota tauri build
       - name: Prepare test bundle
         shell: pwsh
         run: |
