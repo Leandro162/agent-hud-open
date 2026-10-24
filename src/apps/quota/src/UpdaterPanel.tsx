@@ -16,6 +16,7 @@ export function UpdaterPanel({ expanded }: { expanded: boolean }) {
     | "error"
   >("idle");
   const [message, setMessage] = useState("");
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const operation = useRef(false);
   const current = useRef<Update | null>(null);
@@ -35,6 +36,7 @@ export function UpdaterPanel({ expanded }: { expanded: boolean }) {
       const previous = current.current;
       current.current = update;
       setAvailable(update);
+      setLastChecked(new Date());
       await previous?.close().catch(() => {});
       setPhase(update ? "available" : "latest");
     } catch {
@@ -133,6 +135,15 @@ export function UpdaterPanel({ expanded }: { expanded: boolean }) {
       {phase === "latest" && (
         <p className="update-message" role="status">
           已是最新版本
+        </p>
+      )}
+      {lastChecked && (
+        <p className="muted">
+          上次检查{" "}
+          {lastChecked.toLocaleTimeString("zh-CN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
         </p>
       )}
       {available && (
