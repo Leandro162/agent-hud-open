@@ -19,7 +19,7 @@ try {
   await expect(page.getByText("未配置 DeepSeek API Key")).toBeVisible();
   await expect(page.getByRole("meter").first()).toBeVisible();
   await page.screenshot({
-    path: "test-results/quota/simple.png",
+    path: "test-results/quota/overview.png",
     fullPage: true,
   });
   await page.getByRole("button", { name: "Dynamic 动态" }).click();
@@ -64,7 +64,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "Browser checks passed: actual quotas, modes, saved preference, stale retention, reduced motion, 320/360/520px layouts.",
+    "Browser checks passed: actual quotas, dynamic mode, stale retention, reduced motion, 320/360/520px layouts.",
   );
 } finally {
   await browser.close();

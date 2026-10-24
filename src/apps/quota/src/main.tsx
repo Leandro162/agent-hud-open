@@ -5,6 +5,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hudPalette } from "@agent-hud/hud/tokens";
 import type { Provider, QuotaWindow, Snapshot } from "./types";
 import "./style.css";
+import openaiIcon from "./assets/openai-icon.svg";
+import deepseekIcon from "./assets/deepseek.ico";
 
 const messages: Record<string, string> = {
   not_configured: "未配置 DeepSeek API Key",
@@ -128,9 +130,6 @@ function WindowRow({ value, now }: { value: QuotaWindow; now: number }) {
 }
 
 function App() {
-  const [mode, setMode] = useState(() =>
-    localStorage.getItem("quota-mode") === "dynamic" ? "dynamic" : "simple",
-  );
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [disconnected, setDisconnected] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -222,7 +221,7 @@ function App() {
 
   return (
     <main
-      className={mode}
+      className="dynamic"
       style={
         {
           "--ok": palette.ok,
@@ -234,14 +233,35 @@ function App() {
       <header data-tauri-drag-region>
         <div className="title" data-tauri-drag-region>
           <span className="brand" aria-hidden="true">
-            ◉
+            <span />
+            <span />
+            <span />
           </span>
           <span data-tauri-drag-region>
-            额度 <small>AGENT HUD</small>
+            Agent HUD <small>账户额度 · 实时概览</small>
           </span>
         </div>
         <div className="actions">
-          <button disabled={busy} onClick={() => void refresh(true)}>
+          <button
+            className="refresh-button"
+            disabled={busy}
+            onClick={() => void refresh(true)}
+          >
+            <svg
+              className={busy ? "refresh-icon spinning" : "refresh-icon"}
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 7v5h-5M4 17v-5h5" />
+              <path d="M6.1 7a7 7 0 0 1 11.5-1L20 9M4 15l2.4 3A7 7 0 0 0 18 17" />
+            </svg>
             {busy ? "刷新中…" : "刷新"}
           </button>
           <button
@@ -260,30 +280,9 @@ function App() {
           )}
         </div>
       </header>
-      <div className="mode-switch" aria-label="显示模式">
-        <button
-          aria-pressed={mode === "simple"}
-          onClick={() => {
-            setMode("simple");
-            localStorage.setItem("quota-mode", "simple");
-          }}
-        >
-          Simple 简约
-        </button>
-        <button
-          aria-pressed={mode === "dynamic"}
-          onClick={() => {
-            setMode("dynamic");
-            localStorage.setItem("quota-mode", "dynamic");
-          }}
-        >
-          Dynamic 动态
-        </button>
-      </div>
       {settings && (
         <aside>
           <p>通过安全隧道连接服务器。自动读取间隔 60 秒，失败后逐步退避。</p>
-          <p>Dynamic 的轻微呼吸仅为装饰。</p>
           {isTauri() && (
             <label>
               <input
@@ -310,7 +309,7 @@ function App() {
       <section aria-labelledby="codex-heading">
         <h2 id="codex-heading">
           <span className="provider-mark" aria-hidden="true">
-            C
+            <img src={openaiIcon} alt="" />
           </span>
           Codex <small>账户额度</small>
         </h2>
@@ -332,7 +331,7 @@ function App() {
       <section aria-labelledby="deepseek-heading">
         <h2 id="deepseek-heading">
           <span className="provider-mark deepseek" aria-hidden="true">
-            D
+            <img src={deepseekIcon} alt="" />
           </span>
           DeepSeek <small>官方 API</small>
         </h2>
