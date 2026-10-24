@@ -1,11 +1,11 @@
 {
-    "version":  "0.2.1",
-    "notes":  "自动更新正式验证版。\n新增上次成功检查时间；支持在原文件夹内安装并自动重启，保留现有连接配置。\n继续保留动态界面、圆角卡片和官方服务图标。",
-    "pub_date":  "2026-10-24T15:22:45Z",
+    "version":  "0.2.2",
+    "notes":  "紧凑小面板：默认窗口改为 340 × 500，并按屏幕可用区域与缩放比例限制尺寸。\n修正标题问号乱码，移除重复收起按钮。\n额度、重置倒计时和余额集中显示；设置与更新改为窗口内弹层，不再撑长主界面。\n保留官方图标、圆角和动态效果。",
+    "pub_date":  "2026-10-24T15:47:56Z",
     "platforms":  {
                       "windows-x86_64":  {
-                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRcHFzWlFOVHRtY3NiYXVsWlQxeHN3R0lneHE1VUNuTHpYS2NDNWk1L1JhSm9oU3I5Z25hcXZUY3QrOE1ZSkN2WnlXVmE4WVZNbndTNTMvTUR0ZWs2aWFXbXA2SXZHcEFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyODU1MzY1CWZpbGU6YWdlbnQtaHVkLXF1b3RhLTAuMi4xLXNldHVwLmV4ZQl2ZXJzaW9uOjAuMi4xCkJKdm54aWpGR1Q3d2tNcHNGcEhvc1RXYXI5cFlwZGp4clFMMXo4djA0YW4wRk9iYnhpT2xRRUV1M0NxWENTd3hVSmZvN0NjdkpNWUhkM3M4TjZKVEJnPT0K",
-                                             "url":  "https://github.com/Leandro162/agent-hud-open/releases/download/quota-v0.2.1/agent-hud-quota-0.2.1-setup.exe"
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRcHFzWlFOVHRtY2xtN3NzTjhiRDRjRTNYSU0zaUphN2tBUFZyUFFBSUJJa01sYlRTaXNNNE8yZWhRc3MvVGt1UHR0SFpIN3FpdWg4VUtZcHJ4MXhQTW80bXZIbEV2cVFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyODU2ODc1CWZpbGU6YWdlbnQtaHVkLXF1b3RhLTAuMi4yLXNldHVwLmV4ZQl2ZXJzaW9uOjAuMi4yCm9IaERIaG5OeUR2OHh6b0RLRlEvczZJOEpUM3g2RWYreFVPOWMxZ0x4TVZNTVpIeFh4cEJHczdySkNrYWdCUWN4ZHNFY29VRHVIYThrU3pRdEZ2bEJnPT0K",
+                                             "url":  "https://github.com/Leandro162/agent-hud-open/releases/download/quota-v0.2.2/agent-hud-quota-0.2.2-setup.exe"
                                          }
                   }
 }
