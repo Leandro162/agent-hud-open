@@ -387,3 +387,41 @@ footer::before {
     width: 22px;
   }
 }
+.updater-panel {
+  background: #e3ece6;
+  border: 1px solid #d7e3da;
+  border-radius: 18px;
+  margin-bottom: 13px;
+  padding: 14px;
+}
+.updater-panel[hidden] {
+  display: none;
+}
+.update-title {
+  font-size: 12px !important;
+  letter-spacing: 0 !important;
+}
+.update-message {
+  color: #397b62;
+  margin-top: 10px;
+}
+.update-release {
+  margin-top: 12px;
+  border-top: 1px solid #d1dfd5;
+  padding-top: 10px;
+}
+.update-notes {
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+  font-size: 11px;
+  margin: 8px 0;
+}
+.update-release button {
+  margin-top: 9px;
+}
+.updater-panel progress {
+  width: 100%;
+  accent-color: #397b62;
+  margin-top: 10px;
+}

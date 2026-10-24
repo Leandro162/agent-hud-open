@@ -1,7 +1,7 @@
 {
   "name": "@agent-hud/quota",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1421 --strictPort",
@@ -14,6 +14,7 @@
   "dependencies": {
     "@agent-hud/hud": "workspace:*",
     "@tauri-apps/api": "catalog:",
+    "@tauri-apps/plugin-updater": "^2.14.0",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

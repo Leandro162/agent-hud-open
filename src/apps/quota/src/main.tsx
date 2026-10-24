@@ -7,6 +7,7 @@ import type { Provider, QuotaWindow, Snapshot } from "./types";
 import "./style.css";
 import openaiIcon from "./assets/openai-icon.svg";
 import deepseekIcon from "./assets/deepseek.ico";
+import { UpdaterPanel } from "./UpdaterPanel";
 
 const messages: Record<string, string> = {
   not_configured: "未配置 DeepSeek API Key",
@@ -306,6 +307,7 @@ function App() {
           <p className="muted">凭据和 Codex 登录仅保留在服务器。</p>
         </aside>
       )}
+      <UpdaterPanel expanded={settings} />
       <section aria-labelledby="codex-heading">
         <h2 id="codex-heading">
           <span className="provider-mark" aria-hidden="true">

@@ -47,6 +47,15 @@ fn main() {
         )))
         .invoke_handler(tauri::generate_handler![quota_snapshot])
         .setup(|app| {
+            // Keep updates in the existing portable folder, including paths with spaces.
+            // NSIS requires /D to be the last unquoted argument.
+            let executable = std::env::current_exe()?;
+            let directory = executable.parent().ok_or("application directory missing")?;
+            app.handle().plugin(
+                tauri_plugin_updater::Builder::new()
+                    .installer_arg(format!("/D={}", directory.display()))
+                    .build(),
+            )?;
             let show = MenuItem::with_id(app, "show", "显示额度面板", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
