@@ -49,9 +49,8 @@ jobs:
           $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S /UPDATE /D=$directory" -WindowStyle Hidden -PassThru
           if (!$process.WaitForExit(120000)) { throw 'Updater installer timed out' }
           if ($process.ExitCode -ne 0) { throw "Updater installer failed: $($process.ExitCode)" }
-          $expected = (Get-FileHash target/release/agent-hud-quota.exe -Algorithm SHA256).Hash
-          $actual = (Get-FileHash -LiteralPath (Join-Path $directory 'agent-hud-quota.exe') -Algorithm SHA256).Hash
-          if ($actual -ne $expected) { throw 'Updater did not install at the requested path' }
+          node src/apps/quota/scripts/verify-installed.mjs target/release/agent-hud-quota.exe (Join-Path $directory 'agent-hud-quota.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'Updater did not install the expected executable at the requested path' }
           if ((Get-Content -LiteralPath (Join-Path $directory 'Run-LocalPanel.ps1')).Trim() -ne 'launcher-preservation-sentinel') { throw 'Launcher was changed' }
           if ((Get-Content -LiteralPath (Join-Path $directory 'connection-test.txt')).Trim() -ne 'connection-preservation-sentinel') { throw 'Existing configuration was changed' }
           Write-Output 'PASS: native NSIS updater, path with spaces, in-place executable, external launcher/config preservation.'
