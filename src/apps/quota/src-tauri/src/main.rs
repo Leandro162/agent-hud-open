@@ -47,6 +47,22 @@ fn main() {
         )))
         .invoke_handler(tauri::generate_handler![quota_snapshot])
         .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                if let Some(monitor) = window.current_monitor()? {
+                    // Work area excludes the taskbar. Convert physical pixels so
+                    // 125%/150% display scaling cannot turn this into a full-height panel.
+                    let scale = monitor.scale_factor();
+                    let area = monitor.work_area();
+                    let max_width = (area.size.width as f64 / scale - 48.0).clamp(280.0, 420.0);
+                    let max_height = (area.size.height as f64 / scale - 64.0).clamp(280.0, 600.0);
+                    window.set_max_size(Some(tauri::LogicalSize::new(max_width, max_height)))?;
+                    window.set_size(tauri::LogicalSize::new(
+                        340.0_f64.min(max_width),
+                        500.0_f64.min(max_height),
+                    ))?;
+                    window.center()?;
+                }
+            }
             // Keep updates in the existing portable folder, including paths with spaces.
             // NSIS requires /D to be the last unquoted argument.
             let executable = std::env::current_exe()?;

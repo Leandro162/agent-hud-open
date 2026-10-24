@@ -8,8 +8,9 @@ packages live in immutable `quota-vX.Y.Z` GitHub releases in
 ## User flow
 
 - Launch checks after eight seconds, then every six hours. Checks never install.
-- Settings shows the running native version and a manual check button.
-- A newer version opens a persistent update card containing plain-text release
+- Settings opens a bounded in-window dialog with the running native version and
+  a manual check button. It does not increase the main panel height.
+- A newer version adds a dot to Settings. The dialog contains plain-text release
   notes and a download/install button. Only that button starts the update.
 - The Tauri updater downloads, verifies its signature and signed version, and
   then runs the per-user NSIS installer and restarts the app.
@@ -20,6 +21,10 @@ packages live in immutable `quota-vX.Y.Z` GitHub releases in
   allow retry. A failed signature never reaches the install call.
 - A disconnected GitHub channel is an update error, never evidence that the
   app is current. This channel requires outbound HTTPS connectivity.
+- The main window defaults to 340 by 500 logical pixels, with a clean ASCII
+  title. At startup its bounds are capped to the current monitor work area after
+  accounting for display scaling. The window cannot maximize; normal quota and
+  balance data fit without scrolling at the default size.
 
 ## Release procedure
 

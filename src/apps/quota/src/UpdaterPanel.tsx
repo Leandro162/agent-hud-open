@@ -3,7 +3,13 @@ import { getVersion } from "@tauri-apps/api/app";
 import { isTauri } from "@tauri-apps/api/core";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 
-export function UpdaterPanel({ expanded }: { expanded: boolean }) {
+export function UpdaterPanel({
+  expanded,
+  onAvailabilityChange,
+}: {
+  expanded: boolean;
+  onAvailabilityChange?: (available: boolean) => void;
+}) {
   const [version, setVersion] = useState("");
   const [available, setAvailable] = useState<Update | null>(null);
   const [phase, setPhase] = useState<
@@ -36,6 +42,7 @@ export function UpdaterPanel({ expanded }: { expanded: boolean }) {
       const previous = current.current;
       current.current = update;
       setAvailable(update);
+      onAvailabilityChange?.(!!update);
       setLastChecked(new Date());
       await previous?.close().catch(() => {});
       setPhase(update ? "available" : "latest");

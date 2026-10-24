@@ -10,7 +10,7 @@ try {
     "check-failure",
   ]) {
     const page = await browser.newPage({
-      viewport: { width: 380, height: 900 },
+      viewport: { width: 340, height: 500 },
     });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -97,6 +97,8 @@ try {
       await expect(
         page.getByRole("button", { name: "检查更新", exact: true }),
       ).toBeDisabled();
+      await page.getByRole("button", { name: "关闭设置" }).click();
+      await expect(page.getByRole("dialog")).not.toBeVisible();
       await page.getByRole("button", { name: "设置", exact: true }).click();
       await expect(page.locator(".updater-panel")).toBeVisible();
       if (scenario === "download-failure") {

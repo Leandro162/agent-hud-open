@@ -4,7 +4,7 @@ await mkdir("test-results/quota", { recursive: true });
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({
-    viewport: { width: 360, height: 760 },
+    viewport: { width: 340, height: 500 },
     deviceScaleFactor: 1.5,
   });
   const errors = [];
@@ -65,22 +65,50 @@ try {
     expect(await img.evaluate((e) => e.complete && e.naturalWidth > 0)).toBe(
       true,
     );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollHeight <= innerHeight,
+    ),
+  ).toBe(true);
+  await page
+    .locator("section")
+    .first()
+    .evaluate(async (element) => {
+      await Promise.all(
+        element.getAnimations().map((animation) => animation.finished),
+      );
+    });
+  const before = await page.locator("section").first().boundingBox();
   await page.screenshot({
-    path: "test-results/quota/redesign.png",
+    path: "test-results/quota/compact.png",
     fullPage: true,
   });
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await expect(page.locator("aside")).toBeVisible();
+  const after = await page.locator("section").first().boundingBox();
+  expect(after.y).toBe(before.y);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollHeight <= innerHeight,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "test-results/quota/compact-settings.png",
+    fullPage: true,
+  });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
   await page.getByRole("button", { name: "设置", exact: true }).click();
-  for (const width of [320, 360, 520]) {
-    await page.setViewportSize({ width, height: 760 });
+  await page.getByRole("button", { name: "关闭设置" }).click();
+  for (const width of [280, 320, 340, 420]) {
+    await page.setViewportSize({ width, height: 500 });
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
   }
-  await page.setViewportSize({ width: 360, height: 760 });
+  await page.setViewportSize({ width: 340, height: 500 });
   await page.route("**/api/**", (r) => r.abort());
   await page.getByRole("button", { name: "刷新", exact: true }).click();
   await expect(page.getByText("连接中断 · 请检查安全隧道")).toBeVisible();
@@ -89,7 +117,7 @@ try {
     "76",
   );
   await page.screenshot({
-    path: "test-results/quota/redesign-disconnected.png",
+    path: "test-results/quota/compact-disconnected.png",
     fullPage: true,
   });
   await page.emulateMedia({ reducedMotion: "reduce" });

@@ -18,8 +18,8 @@ body {
 }
 main {
   min-height: 100vh;
-  padding: 20px 16px 12px;
-  max-width: 520px;
+  padding: 12px;
+  max-width: 420px;
   margin: auto;
 }
 header,
@@ -36,12 +36,12 @@ header,
   gap: 8px;
 }
 header {
-  min-height: 38px;
-  margin-bottom: 20px;
+  min-height: 32px;
+  margin-bottom: 12px;
 }
 .title {
   gap: 9px;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 650;
   letter-spacing: -0.4px;
 }
@@ -54,8 +54,8 @@ header {
   font-weight: 400;
 }
 .brand {
-  width: 30px;
-  height: 32px;
+  width: 24px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -81,12 +81,12 @@ button {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-height: 32px;
+  min-height: 28px;
   border: 1px solid #dce5df;
   border-radius: 999px;
   background: #ffffffa6;
   color: #506359;
-  padding: 6px 11px;
+  padding: 5px 10px;
   font: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -128,10 +128,10 @@ input:focus-visible {
   animation: spin 1.2s linear infinite;
 }
 section {
-  padding: 17px;
-  margin-bottom: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
   border: 1px solid #fff;
-  border-radius: 23px;
+  border-radius: 18px;
   background: linear-gradient(145deg, #fffffff5, #f9fbfaf2);
   box-shadow:
     0 6px 24px #25453506,
@@ -142,9 +142,9 @@ section:nth-of-type(2) {
   animation-delay: 0.08s;
 }
 h2 {
-  margin: 0 0 17px;
+  margin: 0 0 10px;
   gap: 10px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 650;
   letter-spacing: -0.25px;
 }
@@ -161,16 +161,16 @@ h2 small {
 .provider-mark {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   background: #f3f5f3;
   border: 1px solid #e7ece8;
   border-radius: 12px;
   flex-shrink: 0;
 }
 .provider-mark img {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
   color-scheme: light;
 }
@@ -179,15 +179,16 @@ h2 small {
   border-color: #e6ecff;
 }
 .provider-mark.deepseek img {
-  width: 27px;
-  height: 27px;
+  width: 24px;
+  height: 24px;
 }
 .quota-row {
-  margin: 0 0 14px;
-  padding-bottom: 14px;
+  margin: 0 0 10px;
+  padding-bottom: 10px;
   border-bottom: 1px solid #edf1ee;
 }
-.quota-row:last-of-type {
+.quota-row:nth-last-child(2) {
+  margin-bottom: 0;
   padding-bottom: 0;
   border-bottom: 0;
 }
@@ -196,7 +197,7 @@ h2 small {
   font-size: 11px;
 }
 .row strong {
-  font-size: 29px;
+  font-size: 24px;
   line-height: 1.25;
   letter-spacing: -1.2px;
   font-weight: 600;
@@ -209,11 +210,11 @@ h2 small {
   color: #78877f;
 }
 .track {
-  height: 7px;
+  height: 5px;
   background: #e8efea;
   border-radius: 99px;
   overflow: hidden;
-  margin: 10px 0;
+  margin: 7px 0;
 }
 .track > div {
   height: 100%;
@@ -261,7 +262,10 @@ p {
   font-size: 11px;
 }
 .provider-status {
-  margin-top: 12px;
+  margin-top: 8px;
+}
+.provider-status:empty {
+  display: none;
 }
 .provider-status > .muted {
   font-size: 9px;
@@ -274,21 +278,21 @@ p {
   margin: 0 0 9px;
 }
 .balance .row {
-  display: block;
+  display: flex;
 }
 .balance .row > span {
   display: block;
-  margin-bottom: 7px;
+  margin-bottom: 0;
 }
 .balance .row strong {
   display: block;
-  font-size: 36px;
+  font-size: 28px;
   letter-spacing: -1.4px;
 }
 .balance > p {
   font-size: 10px;
   color: #77857d;
-  margin-top: 9px;
+  margin-top: 5px;
 }
 aside {
   background: #e3ece6;
@@ -371,10 +375,10 @@ footer::before {
 }
 @media (max-width: 340px) {
   main {
-    padding: 16px 10px 10px;
+    padding: 12px;
   }
   section {
-    padding: 14px;
+    padding: 12px;
   }
   .actions button {
     padding: 5px 8px;
@@ -424,4 +428,71 @@ footer::before {
   width: 100%;
   accent-color: #397b62;
   margin-top: 10px;
+}
+
+.quota-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  color: #64796c;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.quota-health {
+  flex-shrink: 0;
+}
+.quota-meta > span:last-child {
+  text-align: right;
+}
+.warning .quota-health {
+  color: #8d601c;
+}
+.critical .quota-health {
+  color: #b13f38;
+}
+.update-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #397b62;
+}
+.settings-dialog {
+  width: calc(100% - 24px);
+  max-width: 360px;
+  max-height: calc(100dvh - 24px);
+  padding: 14px;
+  color: #263431;
+  background: #f3f7f4;
+  border: 1px solid #fff;
+  border-radius: 20px;
+  box-shadow: 0 12px 44px #263b3926;
+  overflow: auto;
+}
+.settings-dialog::backdrop {
+  background: #1b302d35;
+  backdrop-filter: blur(4px);
+}
+.dialog-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.dialog-heading h2 {
+  margin: 0;
+}
+.settings-dialog aside {
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+}
+.settings-dialog aside label {
+  padding: 4px 0;
+}
+.settings-dialog .updater-panel {
+  padding: 10px;
+  margin-bottom: 0;
+  border-radius: 12px;
 }

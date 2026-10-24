@@ -66,7 +66,11 @@ function Status<T>({
     provider.status === "stale" ||
     (!!provider.updatedAt && now - Date.parse(provider.updatedAt) > 120000);
   return (
-    <div className="provider-status" aria-live="polite">
+    <div
+      className="provider-status"
+      aria-live="polite"
+      title={`上次成功：${provider.updatedAt ? formatTime(provider.updatedAt) : "尚未获取"}`}
+    >
       {(stale || provider.error) && (
         <p className="notice">
           {stale && provider.data ? "数据已过期 · " : ""}
@@ -76,10 +80,6 @@ function Status<T>({
         </p>
       )}
       {provider.status === "loading" && <p className="muted">正在读取…</p>}
-      <p className="muted">
-        上次成功：
-        {provider.updatedAt ? formatTime(provider.updatedAt) : "尚未获取"}
-      </p>
     </div>
   );
 }
@@ -114,18 +114,20 @@ function WindowRow({ value, now }: { value: QuotaWindow; now: number }) {
           <div style={{ width: `${percent}%` }} />
         </div>
       )}
-      <p className="muted">
-        {value.name} ·{" "}
-        {percent === null
-          ? "额度未知"
-          : tone === "critical"
-            ? "即将耗尽"
-            : tone === "warning"
-              ? "额度偏低"
-              : "额度充足"}
-      </p>
-      <p>{countdown(value.resetsAt, now)}</p>
-      <p className="muted">重置于 {formatTime(value.resetsAt)}</p>
+      <div className="quota-meta">
+        <span className="quota-health">
+          {percent === null
+            ? "额度未知"
+            : tone === "critical"
+              ? "即将耗尽"
+              : tone === "warning"
+                ? "额度偏低"
+                : "额度充足"}
+        </span>
+        <span title={`重置于 ${formatTime(value.resetsAt)}`}>
+          {countdown(value.resetsAt, now)}
+        </span>
+      </div>
     </div>
   );
 }
@@ -136,12 +138,20 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [settings, setSettings] = useState(false);
+  const [hasUpdate, setHasUpdate] = useState(false);
+  const settingsDialog = useRef<HTMLDialogElement>(null);
   const [pinned, setPinned] = useState(false);
   const [nativeError, setNativeError] = useState("");
   const pending = useRef(false);
   const crossed = useRef(new Set<string>());
   const clockOffset = useRef(0);
   const palette = hudPalette({ light: true });
+
+  useEffect(() => {
+    const dialog = settingsDialog.current;
+    if (settings && !dialog?.open) dialog?.showModal();
+    else if (!settings && dialog?.open) dialog.close();
+  }, [settings]);
 
   async function refresh(manual = false) {
     if (pending.current) return;
@@ -267,23 +277,43 @@ function App() {
           </button>
           <button
             aria-expanded={settings}
+            aria-haspopup="dialog"
             onClick={() => setSettings(!settings)}
           >
-            设置
+            设置{" "}
+            {hasUpdate && <span className="update-dot" aria-hidden="true" />}
           </button>
-          {isTauri() && (
-            <button
-              aria-label="收起到托盘"
-              onClick={() => void getCurrentWindow().hide()}
-            >
-              −
-            </button>
-          )}
         </div>
       </header>
-      {settings && (
+      <dialog
+        ref={settingsDialog}
+        className="settings-dialog"
+        aria-labelledby="settings-heading"
+        onCancel={() => setSettings(false)}
+        onClose={() => setSettings(false)}
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (
+            event.clientX < rect.left ||
+            event.clientX > rect.right ||
+            event.clientY < rect.top ||
+            event.clientY > rect.bottom
+          )
+            setSettings(false);
+        }}
+      >
+        <div className="dialog-heading">
+          <h2 id="settings-heading">设置</h2>
+          <button
+            autoFocus
+            aria-label="关闭设置"
+            onClick={() => setSettings(false)}
+          >
+            完成
+          </button>
+        </div>
         <aside>
-          <p>通过安全隧道连接服务器。自动读取间隔 60 秒，失败后逐步退避。</p>
           {isTauri() && (
             <label>
               <input
@@ -305,9 +335,21 @@ function App() {
           )}
           {nativeError && <p role="alert">{nativeError}</p>}
           <p className="muted">凭据和 Codex 登录仅保留在服务器。</p>
+          <p className="muted">
+            Codex 更新：
+            {snapshot?.providers.codex.updatedAt
+              ? formatTime(snapshot.providers.codex.updatedAt)
+              : "尚未获取"}
+          </p>
+          <p className="muted">
+            DeepSeek 更新：
+            {snapshot?.providers.deepseek.updatedAt
+              ? formatTime(snapshot.providers.deepseek.updatedAt)
+              : "尚未获取"}
+          </p>
         </aside>
-      )}
-      <UpdaterPanel expanded={settings} />
+        <UpdaterPanel expanded={settings} onAvailabilityChange={setHasUpdate} />
+      </dialog>
       <section aria-labelledby="codex-heading">
         <h2 id="codex-heading">
           <span className="provider-mark" aria-hidden="true">
@@ -339,14 +381,14 @@ function App() {
         </h2>
         {snapshot?.providers.deepseek.data?.balances.map((value, index) => (
           <div className="balance" key={`${value.currency}:${index}`}>
-            <div className="row">
+            <div className="row balance-main">
               <span>可用余额</span>
               <strong>
                 {value.total ?? "未知"}{" "}
                 <small>{value.currency ?? "币种未知"}</small>
               </strong>
             </div>
-            <p>
+            <p className="balance-breakdown">
               充值 {value.toppedUp ?? "未知"} · 赠送 {value.granted ?? "未知"}{" "}
               {value.currency}
             </p>
