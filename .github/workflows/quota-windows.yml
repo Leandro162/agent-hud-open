@@ -34,6 +34,27 @@ jobs:
           cache-on-failure: true
       - run: cargo metadata --manifest-path src/apps/quota/src-tauri/Cargo.toml --locked --no-deps --format-version 1
       - run: pnpm --filter @agent-hud/quota tauri build
+      - name: Verify updater install into existing portable folder
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $directory = Join-Path $env:RUNNER_TEMP 'Agent HUD portable update test'
+          New-Item -ItemType Directory -Path $directory | Out-Null
+          # These external launcher/config files must survive an in-place update.
+          'launcher-preservation-sentinel' | Set-Content -LiteralPath (Join-Path $directory 'Run-LocalPanel.ps1')
+          'connection-preservation-sentinel' | Set-Content -LiteralPath (Join-Path $directory 'connection-test.txt')
+          Copy-Item -LiteralPath target/release/agent-hud-quota.exe -Destination (Join-Path $directory 'agent-hud-quota.exe')
+          $installer = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          # /D must remain the last unquoted argument, including spaces in the path.
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S /UPDATE /D=$directory" -WindowStyle Hidden -PassThru
+          if (!$process.WaitForExit(120000)) { throw 'Updater installer timed out' }
+          if ($process.ExitCode -ne 0) { throw "Updater installer failed: $($process.ExitCode)" }
+          $expected = (Get-FileHash target/release/agent-hud-quota.exe -Algorithm SHA256).Hash
+          $actual = (Get-FileHash -LiteralPath (Join-Path $directory 'agent-hud-quota.exe') -Algorithm SHA256).Hash
+          if ($actual -ne $expected) { throw 'Updater did not install at the requested path' }
+          if ((Get-Content -LiteralPath (Join-Path $directory 'Run-LocalPanel.ps1')).Trim() -ne 'launcher-preservation-sentinel') { throw 'Launcher was changed' }
+          if ((Get-Content -LiteralPath (Join-Path $directory 'connection-test.txt')).Trim() -ne 'connection-preservation-sentinel') { throw 'Existing configuration was changed' }
+          Write-Output 'PASS: native NSIS updater, path with spaces, in-place executable, external launcher/config preservation.'
       - name: Prepare test bundle
         shell: pwsh
         run: |
